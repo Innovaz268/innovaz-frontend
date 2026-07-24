@@ -164,12 +164,15 @@ async function cargarDatos() {
   }
 
   async function generarAsientoCostos(orden) {
+    if (orden.asiento_costos) { setMensaje('Esta orden ya fue costeada (' + orden.asiento_costos + ')'); return }
     const lista = costosDeOrden(orden.id)
     if (lista.length === 0) { setMensaje('Esta orden no tiene costos registrados'); return }
     if (!window.confirm('Generar el asiento contable con los costos de esta orden?')) return
     const res = await asientoCostosMueble(orden, lista)
-    setMensaje(res.ok ? res.msg : 'Error: ' + res.msg)
-    if (res.ok) await cargarDatos()
+    if (!res.ok) { setMensaje('Error: ' + res.msg); return }
+    await supabase.from('muebles_ordenes').update({ asiento_costos: res.codigo }).eq('id', orden.id)
+    setMensaje(res.msg)
+    await cargarDatos()
   }
   
 
@@ -517,10 +520,16 @@ async function cargarDatos() {
                   </div>
 
                   <div className="flex justify-end mt-3">
-                    <button onClick={() => generarAsientoCostos(o)}
-                      className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
-                      Generar asiento de costos
-                    </button>
+                    {o.asiento_costos ? (
+                      <span className="px-4 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-lg">
+                        ✓ Costeada — comprobante {o.asiento_costos}
+                      </span>
+                    ) : (
+                      <button onClick={() => generarAsientoCostos(o)}
+                        className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+                        Generar asiento de costos
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

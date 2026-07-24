@@ -243,7 +243,7 @@ export async function asientoCostosMueble(orden, costosOrden) {
     const { error: errLineas } = await supabase.from('asientos_lineas').insert(lineas)
     if (errLineas) { console.error('Error lineas costos:', errLineas); return { ok: false, msg: errLineas.message } }
 
-    return { ok: true, msg: 'Asiento de costos generado: ' + codigo, total }
+    return { ok: true, msg: 'Asiento de costos generado: ' + codigo, codigo, total }
   } catch (e) {
     console.error('Error generando asiento de costos:', e)
     return { ok: false, msg: 'Error inesperado' }

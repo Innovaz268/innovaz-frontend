@@ -4,15 +4,19 @@ import { supabase } from '../supabase'
 function Dashboard() {
   const [contratos, setContratos] = useState([])
   const [caja, setCaja] = useState([])
+  const [terceros, setTerceros] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function cargarDatos() {
-      const { data: ct, error: err1 } = await supabase.from('contratos').select('*').eq('estado', 'Activo')
-      const { data: cj } = await supabase.from('caja').select('*')
-      console.log('contratos:', ct, err1)
-setContratos(ct || [])
+      const [{ data: ct }, { data: cj }, { data: trcs }] = await Promise.all([
+        supabase.from('contratos').select('*').eq('estado', 'Activo'),
+        supabase.from('caja').select('*'),
+        supabase.from('terceros').select('id, nombre'),
+      ])
+      setContratos(ct || [])
       setCaja(cj || [])
+      setTerceros(trcs || [])
       setLoading(false)
     }
     cargarDatos()
@@ -22,6 +26,7 @@ setContratos(ct || [])
   const flujoCaja = caja.reduce((sum, p) => sum + (p.monto || 0), 0)
 
   const fmt = n => '$' + Math.round(n).toLocaleString('es-CO')
+  const nombreCliente = id => terceros.find(t => t.id === id)?.nombre || '---'
 
   if (loading) return (
     <div className="flex items-center justify-center mt-20">
@@ -58,8 +63,9 @@ setContratos(ct || [])
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">ID</th>
+                <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Factura</th>
                 <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Cliente</th>
+                <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Salida</th>
                 <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Total</th>
                 <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Estado</th>
               </tr>
@@ -67,8 +73,9 @@ setContratos(ct || [])
             <tbody>
               {contratos.map(c => (
                 <tr key={c.id} className="border-t border-gray-50 hover:bg-gray-50">
-                  <td className="px-4 py-2 font-mono text-xs text-[#185FA5]">{c.id}</td>
-                  <td className="px-4 py-2 text-xs">{c.cliente_id}</td>
+                  <td className="px-4 py-2 font-semibold text-xs text-[#185FA5]">{c.id_doc || '---'}</td>
+                  <td className="px-4 py-2 text-xs">{nombreCliente(c.cliente_id)}</td>
+                  <td className="px-4 py-2 text-xs text-gray-500">{c.fecha_salida || '---'}</td>
                   <td className="px-4 py-2 text-xs font-semibold">{fmt(c.total || 0)}</td>
                   <td className="px-4 py-2">
                     <span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-semibold">

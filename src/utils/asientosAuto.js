@@ -14,12 +14,33 @@ function cuentaCaja(metodo) {
   return cuentas[metodo] || { codigo: '1105', nombre: 'Caja General' }
 }
 
+// Cuenta de costo segun el tipo (auxiliares de 6120 Industrias Manufactureras)
+function cuentaCosto(tipo) {
+  const cuentas = {
+    'Material': { codigo: '612005', nombre: 'Materia Prima' },
+    'Mano de obra': { codigo: '612010', nombre: 'Mano de Obra' },
+    'Transporte': { codigo: '612015', nombre: 'Costos Indirectos' },
+    'Otro': { codigo: '612015', nombre: 'Costos Indirectos' },
+  }
+  return cuentas[tipo] || { codigo: '612015', nombre: 'Costos Indirectos' }
+}
+
+// Contrapartida segun como se pago el costo
+function cuentaFuente(metodo) {
+  const cuentas = {
+    'Efectivo': { codigo: '1105', nombre: 'Caja General' },
+    'Transferencia': { codigo: '1110', nombre: 'Bancos' },
+    'Nequi': { codigo: '1110', nombre: 'Bancos' },
+    'Daviplata': { codigo: '1110', nombre: 'Bancos' },
+    'Credito': { codigo: '2205', nombre: 'Proveedores Nacionales' },
+  }
+  return cuentas[metodo] || { codigo: '1105', nombre: 'Caja General' }
+}
+
 // Asiento al crear una FACTURA DE ALQUILER
-// Debito: 1305 Clientes
-// Credito: 4175 Alquiler de Bienes Muebles
+// Debito: 1305 Clientes / Credito: 4175 Alquiler de Bienes Muebles
 export async function asientoFactura(factura) {
   try {
-    const codigo = await siguienteConsecutivo('AS')
     const { data: asiento, error } = await supabase
       .from('asientos_contables')
       .insert([{
@@ -57,8 +78,7 @@ export async function asientoFactura(factura) {
 }
 
 // Asiento al registrar un PAGO EN CAJA
-// Debito: 1105 Caja General (o banco segun metodo)
-// Credito: 1305 Clientes
+// Debito: 1105 Caja (o banco) / Credito: 1305 Clientes
 export async function asientoPago(pago, clienteId) {
   try {
     const cuentaPago = cuentaCaja(pago.metodo)
@@ -98,11 +118,9 @@ export async function asientoPago(pago, clienteId) {
   }
 }
 
-// Asiento al crear COTIZACION DE MUEBLE aprobada
-// Debito: 1305 Clientes
-// Credito: 4120 Industrias Manufactureras
-// Si hay anticipo, genera ademas un Recibo de Caja:
-// Debito: 1105 Caja General / Credito: 1305 Clientes
+// Asiento al aprobar una COTIZACION DE MUEBLE
+// Debito: 1305 Clientes / Credito: 4120 Industrias Manufactureras
+// Si hay anticipo: Debito 1105 Caja / Credito 1305 Clientes
 export async function asientoMueble(cotizacion) {
   try {
     const { data: asiento, error } = await supabase
@@ -137,7 +155,6 @@ export async function asientoMueble(cotizacion) {
       }
     ])
 
-    // Segundo asiento: anticipo recibido
     const anticipo = parseFloat(cotizacion.anticipo) || 0
     if (anticipo > 0) {
       const codigoRC = await siguienteConsecutivo('RC')
@@ -175,5 +192,60 @@ export async function asientoMueble(cotizacion) {
     }
   } catch (e) {
     console.error('Error generando asiento mueble:', e)
+  }
+}
+
+// Asiento con los COSTOS ACUMULADOS de una orden de mueble
+// Debito: 612005 / 612010 / 612015 segun el tipo de costo
+// Credito: 1105 Caja, 1110 Bancos o 2205 Proveedores segun como se pago
+export async function asientoCostosMueble(orden, costosOrden) {
+  try {
+    const total = costosOrden.reduce((s, c) => s + (parseFloat(c.valor) || 0), 0)
+    if (total <= 0) return { ok: false, msg: 'La orden no tiene costos registrados' }
+
+    const codigo = await siguienteConsecutivo('CO')
+    const { data: asiento, error } = await supabase
+      .from('asientos_contables')
+      .insert([{
+        fecha: new Date().toISOString().slice(0, 10),
+        descripcion: 'Costos orden mueble ' + codigo,
+        tipo_doc: 'Comprobante de Costos',
+        documento_id: codigo
+      }])
+      .select()
+      .single()
+
+    if (error) { console.error('Error asiento costos:', error); return { ok: false, msg: error.message } }
+
+    const lineas = []
+    costosOrden.forEach(c => {
+      const cc = cuentaCosto(c.tipo)
+      const cf = cuentaFuente(c.metodo_pago)
+      const valor = parseFloat(c.valor) || 0
+      lineas.push({
+        asiento_id: asiento.id,
+        cuenta_codigo: cc.codigo,
+        cuenta_nombre: cc.nombre,
+        debe: valor,
+        haber: 0,
+        tercero_id: c.proveedor_id || null
+      })
+      lineas.push({
+        asiento_id: asiento.id,
+        cuenta_codigo: cf.codigo,
+        cuenta_nombre: cf.nombre,
+        debe: 0,
+        haber: valor,
+        tercero_id: c.proveedor_id || null
+      })
+    })
+
+    const { error: errLineas } = await supabase.from('asientos_lineas').insert(lineas)
+    if (errLineas) { console.error('Error lineas costos:', errLineas); return { ok: false, msg: errLineas.message } }
+
+    return { ok: true, msg: 'Asiento de costos generado: ' + codigo, total }
+  } catch (e) {
+    console.error('Error generando asiento de costos:', e)
+    return { ok: false, msg: 'Error inesperado' }
   }
 }

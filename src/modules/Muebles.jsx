@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { siguienteConsecutivo } from '../utils/consecutivo'
-import { asientoMueble } from '../utils/asientosAuto'
+import { asientoMueble, asientoCostosMueble } from '../utils/asientosAuto'
 
 function Muebles() {
   const [vista, setVista] = useState('cotizaciones')
   const [cotizaciones, setCotizaciones] = useState([])
   const [ordenes, setOrdenes] = useState([])
   const [terceros, setTerceros] = useState([])
+  const [costos, setCostos] = useState([])
+  const [ordenCostos, setOrdenCostos] = useState(null)
+  const [formCosto, setFormCosto] = useState({ fecha: new Date().toISOString().slice(0,10), tipo: 'Material', descripcion: '', proveedor_id: '', valor: 0, metodo_pago: 'Efectivo' })
   const [loading, setLoading] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
@@ -20,16 +23,18 @@ function Muebles() {
 
   useEffect(() => { cargarDatos() }, [])
 
-  async function cargarDatos() {
+async function cargarDatos() {
     setLoading(true)
-    const [{ data: cots }, { data: ords }, { data: trcs }] = await Promise.all([
+    const [{ data: cots }, { data: ords }, { data: trcs }, { data: csts }] = await Promise.all([
       supabase.from('muebles_cotizaciones').select('*').order('created_at', { ascending: false }),
       supabase.from('muebles_ordenes').select('*').order('created_at', { ascending: false }),
       supabase.from('terceros').select('id, nombre').order('nombre'),
+      supabase.from('muebles_costos').select('*').order('fecha', { ascending: false }),
     ])
     setCotizaciones(cots || [])
     setOrdenes(ords || [])
     setTerceros(trcs || [])
+    setCostos(csts || [])
     setLoading(false)
   }
 
@@ -124,6 +129,49 @@ function Muebles() {
     await supabase.from('muebles_ordenes').delete().eq('id', id)
     await cargarDatos()
   }
+  const costosDeOrden = ordenId => costos.filter(c => c.orden_id === ordenId)
+  const totalCostosOrden = ordenId => costosDeOrden(ordenId).reduce((s, c) => s + (parseFloat(c.valor) || 0), 0)
+
+  function abrirCostos(orden) {
+    setOrdenCostos(ordenCostos === orden.id ? null : orden.id)
+    setFormCosto({ fecha: new Date().toISOString().slice(0,10), tipo: 'Material', descripcion: '', proveedor_id: '', valor: 0, metodo_pago: 'Efectivo' })
+    setMensaje('')
+  }
+
+  async function guardarCosto(ordenId) {
+    if (!formCosto.descripcion) { setMensaje('Escriba una descripcion del costo'); return }
+    if (!formCosto.valor || parseFloat(formCosto.valor) <= 0) { setMensaje('El valor debe ser mayor a cero'); return }
+    const datos = {
+      orden_id: ordenId,
+      fecha: formCosto.fecha || null,
+      tipo: formCosto.tipo,
+      descripcion: formCosto.descripcion,
+      proveedor_id: formCosto.proveedor_id || null,
+      valor: parseFloat(formCosto.valor) || 0,
+      metodo_pago: formCosto.metodo_pago
+    }
+    const { error } = await supabase.from('muebles_costos').insert([datos])
+    if (error) { setMensaje('Error: ' + error.message); return }
+    setFormCosto({ fecha: new Date().toISOString().slice(0,10), tipo: 'Material', descripcion: '', proveedor_id: '', valor: 0, metodo_pago: 'Efectivo' })
+    setMensaje('Costo registrado')
+    await cargarDatos()
+  }
+
+  async function eliminarCosto(id) {
+    if (!window.confirm('Eliminar este costo?')) return
+    await supabase.from('muebles_costos').delete().eq('id', id)
+    await cargarDatos()
+  }
+
+  async function generarAsientoCostos(orden) {
+    const lista = costosDeOrden(orden.id)
+    if (lista.length === 0) { setMensaje('Esta orden no tiene costos registrados'); return }
+    if (!window.confirm('Generar el asiento contable con los costos de esta orden?')) return
+    const res = await asientoCostosMueble(orden, lista)
+    setMensaje(res.ok ? res.msg : 'Error: ' + res.msg)
+    if (res.ok) await cargarDatos()
+  }
+  
 
   const estadoBadgeCot = e => {
     const colores = { Borrador: 'bg-gray-100 text-gray-600', Enviada: 'bg-blue-50 text-blue-700', Aprobada: 'bg-green-50 text-green-700', Rechazada: 'bg-red-50 text-red-700' }
@@ -386,9 +434,96 @@ function Muebles() {
                   <div className="text-xs font-semibold">{o.fecha_entrega || '---'}</div>
                 </div>
               </div>
-              <div className="flex justify-end mt-2">
+              <div className="flex justify-between items-center mt-2">
+                <button onClick={() => abrirCostos(o)} className="text-xs font-semibold text-[#185FA5] hover:underline">
+                  {ordenCostos === o.id ? 'Ocultar costos' : `Costos (${costosDeOrden(o.id).length})`}
+                </button>
                 <button onClick={() => eliminarOrden(o.id)} className="text-xs text-red-400 hover:text-red-600">x Eliminar</button>
               </div>
+
+              {ordenCostos === o.id && (
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  {costosDeOrden(o.id).length === 0 ? (
+                    <div className="p-3 text-center text-gray-300 text-xs border border-dashed border-gray-200 rounded-lg mb-3">Sin costos registrados</div>
+                  ) : (
+                    <table className="w-full text-xs mb-3">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-2 py-1 text-left text-gray-500">Fecha</th>
+                          <th className="px-2 py-1 text-left text-gray-500">Tipo</th>
+                          <th className="px-2 py-1 text-left text-gray-500">Descripcion</th>
+                          <th className="px-2 py-1 text-left text-gray-500">Proveedor</th>
+                          <th className="px-2 py-1 text-right text-gray-500">Valor</th>
+                          <th className="px-2 py-1"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {costosDeOrden(o.id).map(c => (
+                          <tr key={c.id} className="border-t border-gray-50">
+                            <td className="px-2 py-1 text-gray-500">{c.fecha || '---'}</td>
+                            <td className="px-2 py-1">{c.tipo}</td>
+                            <td className="px-2 py-1">{c.descripcion}</td>
+                            <td className="px-2 py-1 text-gray-500">{nombreCliente(c.proveedor_id)}</td>
+                            <td className="px-2 py-1 text-right font-semibold">{fmt(c.valor)}</td>
+                            <td className="px-2 py-1"><button onClick={() => eliminarCosto(c.id)} className="text-red-400 hover:text-red-600">x</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  <div className="grid grid-cols-6 gap-2 mb-2">
+                    <input type="date" value={formCosto.fecha} onChange={e => setFormCosto({...formCosto, fecha: e.target.value})} className="px-2 py-1 border border-gray-200 rounded text-xs" />
+                    <select value={formCosto.tipo} onChange={e => setFormCosto({...formCosto, tipo: e.target.value})} className="px-2 py-1 border border-gray-200 rounded text-xs">
+                      <option>Material</option>
+                      <option>Mano de obra</option>
+                      <option>Transporte</option>
+                      <option>Otro</option>
+                    </select>
+                    <input value={formCosto.descripcion} onChange={e => setFormCosto({...formCosto, descripcion: e.target.value})} placeholder="Descripcion" className="col-span-2 px-2 py-1 border border-gray-200 rounded text-xs" />
+                    <select value={formCosto.proveedor_id} onChange={e => setFormCosto({...formCosto, proveedor_id: e.target.value})} className="px-2 py-1 border border-gray-200 rounded text-xs">
+                      <option value="">Proveedor</option>
+                      {terceros.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                    </select>
+                    <input type="number" value={formCosto.valor} onChange={e => setFormCosto({...formCosto, valor: e.target.value})} placeholder="Valor" className="px-2 py-1 border border-gray-200 rounded text-xs" />
+                  </div>
+
+                  <div className="flex justify-between items-center mb-3">
+                    <select value={formCosto.metodo_pago} onChange={e => setFormCosto({...formCosto, metodo_pago: e.target.value})} className="px-2 py-1 border border-gray-200 rounded text-xs">
+                      <option>Efectivo</option>
+                      <option>Transferencia</option>
+                      <option>Nequi</option>
+                      <option>Daviplata</option>
+                      <option>Credito</option>
+                    </select>
+                    <button onClick={() => guardarCosto(o.id)} className="px-4 py-1.5 bg-[#185FA5] text-white text-xs font-bold rounded-lg hover:opacity-90">+ Agregar costo</button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 text-center bg-gray-50 rounded-lg p-2">
+                    <div>
+                      <div className="text-xs text-gray-400">Venta</div>
+                      <div className="text-sm font-bold text-[#185FA5]">{fmt(o.total)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400">Costo total</div>
+                      <div className="text-sm font-bold text-[#92400E]">{fmt(totalCostosOrden(o.id))}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400">Utilidad</div>
+                      <div className={`text-sm font-bold ${(o.total || 0) - totalCostosOrden(o.id) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {fmt((o.total || 0) - totalCostosOrden(o.id))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end mt-3">
+                    <button onClick={() => generarAsientoCostos(o)}
+                      className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+                      Generar asiento de costos
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

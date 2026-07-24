@@ -100,7 +100,9 @@ export async function asientoPago(pago, clienteId) {
 
 // Asiento al crear COTIZACION DE MUEBLE aprobada
 // Debito: 1305 Clientes
-// Credito: 4135 Comercio al por Mayor
+// Credito: 4120 Industrias Manufactureras
+// Si hay anticipo, genera ademas un Recibo de Caja:
+// Debito: 1105 Caja General / Credito: 1305 Clientes
 export async function asientoMueble(cotizacion) {
   try {
     const { data: asiento, error } = await supabase
@@ -127,13 +129,50 @@ export async function asientoMueble(cotizacion) {
       },
       {
         asiento_id: asiento.id,
-        cuenta_codigo: '4135',
-        cuenta_nombre: 'Comercio al por Mayor',
+        cuenta_codigo: '4120',
+        cuenta_nombre: 'Industrias Manufactureras',
         debe: 0,
         haber: cotizacion.total || 0,
         tercero_id: cotizacion.cliente_id || ''
       }
     ])
+
+    // Segundo asiento: anticipo recibido
+    const anticipo = parseFloat(cotizacion.anticipo) || 0
+    if (anticipo > 0) {
+      const codigoRC = await siguienteConsecutivo('RC')
+      const { data: asientoAnt, error: errAnt } = await supabase
+        .from('asientos_contables')
+        .insert([{
+          fecha: cotizacion.fecha || new Date().toISOString().slice(0, 10),
+          descripcion: 'Anticipo mueble ' + (cotizacion.id_doc || ''),
+          tipo_doc: 'Recibo de Caja',
+          documento_id: codigoRC
+        }])
+        .select()
+        .single()
+
+      if (errAnt) { console.error('Error asiento anticipo:', errAnt); return }
+
+      await supabase.from('asientos_lineas').insert([
+        {
+          asiento_id: asientoAnt.id,
+          cuenta_codigo: '1105',
+          cuenta_nombre: 'Caja General',
+          debe: anticipo,
+          haber: 0,
+          tercero_id: cotizacion.cliente_id || ''
+        },
+        {
+          asiento_id: asientoAnt.id,
+          cuenta_codigo: '1305',
+          cuenta_nombre: 'Clientes',
+          debe: 0,
+          haber: anticipo,
+          tercero_id: cotizacion.cliente_id || ''
+        }
+      ])
+    }
   } catch (e) {
     console.error('Error generando asiento mueble:', e)
   }

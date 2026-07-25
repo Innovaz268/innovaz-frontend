@@ -1,5 +1,5 @@
 import { siguienteConsecutivo } from '../utils/consecutivo'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { asientoFactura } from '../utils/asientosAuto'
 
@@ -422,8 +422,8 @@ let error
                 const trc = terceros.find(t => t.id === c.cliente_id)
                 const saldoC = (c.total || 0) - (c.anticipo || 0)
                 return (
-                  <>
-                  <tr key={c.id} className="border-t border-gray-50 hover:bg-gray-50">
+                  <React.Fragment key={c.id}>
+                  <tr className="border-t border-gray-50 hover:bg-gray-50">
                     <td className="px-4 py-2 font-mono text-xs text-[#185FA5] font-bold">{c.id_doc || '---'}</td>
                     <td className="px-4 py-2 font-semibold text-xs">{trc?.nombre || c.cliente_id}</td>
                     <td className="px-4 py-2 text-xs text-gray-500">{c.fecha_salida || '—'}</td>
@@ -499,7 +499,7 @@ let error
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 )
               })}
             </tbody>

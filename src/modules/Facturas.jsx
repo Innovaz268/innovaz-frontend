@@ -7,6 +7,8 @@ function Facturas() {
   const [contratos, setContratos] = useState([])
   const [terceros, setTerceros] = useState([])
   const [equipos, setEquipos] = useState([])
+  const [lineas, setLineas] = useState([])
+  const [verLineas, setVerLineas] = useState(null)
   const [loading, setLoading] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
@@ -22,14 +24,16 @@ function Facturas() {
 
   async function cargarDatos() {
     setLoading(true)
-    const [{ data: cts }, { data: trcs }, { data: eqs }] = await Promise.all([
+    const [{ data: cts }, { data: trcs }, { data: eqs }, { data: lns }] = await Promise.all([
       supabase.from('contratos').select('*').order('created_at', { ascending: false }),
       supabase.from('terceros').select('id, nombre, dir').order('nombre'),
       supabase.from('equipos').select('id, nombre, tarifa').order('nombre'),
+      supabase.from('alquiler_lineas').select('*').order('created_at', { ascending: false }),
     ])
     setContratos(cts || [])
     setTerceros(trcs || [])
     setEquipos(eqs || [])
+    setLineas(lns || [])
     setLoading(false)
   }
 
@@ -91,8 +95,23 @@ let error
     } else {
       codigo = await siguienteConsecutivo('FC')
       const datos2 = { ...datos, id_doc: codigo }
-      const res = await supabase.from('contratos').insert([datos2])
+      const res = await supabase.from('contratos').insert([datos2]).select().single()
       error = res.error
+      if (!error && res.data) {
+        const lineas = form.items.map(it => ({
+          contrato_id: res.data.id,
+          equipo_id: it.equipo_id || null,
+          nombre: it.nombre || '',
+          cantidad: parseFloat(it.cantidad) || 1,
+          dias: parseFloat(it.dias) || 1,
+          tarifa: parseFloat(it.tarifa) || 0,
+          subtotal: parseFloat(it.subtotal) || 0,
+          fecha_salida: form.fecha_salida || null,
+          fecha_est_dev: form.fecha_est_dev || null,
+          estado: 'En obra'
+        }))
+        if (lineas.length > 0) await supabase.from('alquiler_lineas').insert(lineas)
+      }
     }
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
     if (!editandoId) await asientoFactura({ ...datos, id_doc: codigo })
@@ -106,6 +125,16 @@ let error
   async function eliminarFactura(id) {
     if (!window.confirm('¿Eliminar esta factura?')) return
     await supabase.from('contratos').delete().eq('id', id)
+    await cargarDatos()
+  }
+  async function devolverEquipo(linea) {
+    const fecha = window.prompt('Fecha de devolución (AAAA-MM-DD):', new Date().toISOString().slice(0,10))
+    if (!fecha) return
+    const { error } = await supabase.from('alquiler_lineas')
+      .update({ estado: 'Devuelto', fecha_dev_real: fecha })
+      .eq('id', linea.id)
+    if (error) { setMensaje('Error: ' + error.message); return }
+    setMensaje('✓ Equipo devuelto: ' + linea.nombre)
     await cargarDatos()
   }
 
@@ -290,6 +319,7 @@ let error
                 const trc = terceros.find(t => t.id === c.cliente_id)
                 const saldoC = (c.total || 0) - (c.anticipo || 0)
                 return (
+                  <>
                   <tr key={c.id} className="border-t border-gray-50 hover:bg-gray-50">
                     <td className="px-4 py-2 font-mono text-xs text-[#185FA5] font-bold">{c.id_doc || '---'}</td>
                     <td className="px-4 py-2 font-semibold text-xs">{trc?.nombre || c.cliente_id}</td>
@@ -304,10 +334,53 @@ let error
                       <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${estadoBadge(c.estado)}`}>{c.estado}</span>
                     </td>
                     <td className="px-4 py-2 text-right flex gap-2 justify-end">
+                      <button onClick={() => setVerLineas(verLineas === c.id ? null : c.id)} className="text-xs text-[#185FA5] hover:underline font-semibold">Equipos</button>
                       <button onClick={() => abrirEditar(c)} className="text-xs text-blue-400 hover:text-blue-600">✏️</button>
                       <button onClick={() => eliminarFactura(c.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                     </td>
                   </tr>
+                  {verLineas === c.id && (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-3 bg-gray-50">
+                          <div className="text-xs font-semibold text-gray-600 mb-2">Equipos de esta factura</div>
+                          {lineas.filter(l => l.contrato_id === c.id).length === 0 ? (
+                            <div className="text-xs text-gray-400 p-2">Sin equipos registrados en control</div>
+                          ) : (
+                            <table className="w-full text-xs bg-white rounded-lg overflow-hidden">
+                              <thead className="bg-gray-100">
+                                <tr>
+                                  <th className="px-2 py-1 text-left text-gray-500">Equipo</th>
+                                  <th className="px-2 py-1 text-left text-gray-500">Salida</th>
+                                  <th className="px-2 py-1 text-left text-gray-500">Dev. est.</th>
+                                  <th className="px-2 py-1 text-left text-gray-500">Estado</th>
+                                  <th className="px-2 py-1 text-left text-gray-500">Dev. real</th>
+                                  <th className="px-2 py-1"></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {lineas.filter(l => l.contrato_id === c.id).map(l => (
+                                  <tr key={l.id} className="border-t border-gray-50">
+                                    <td className="px-2 py-1 font-semibold">{l.nombre}</td>
+                                    <td className="px-2 py-1 text-gray-500">{l.fecha_salida || '—'}</td>
+                                    <td className="px-2 py-1 text-gray-500">{l.fecha_est_dev || '—'}</td>
+                                    <td className="px-2 py-1">
+                                      <span className={`px-2 py-0.5 rounded-full font-semibold ${l.estado === 'En obra' ? 'bg-amber-50 text-amber-700' : l.estado === 'Devuelto' ? 'bg-green-50 text-green-700' : 'bg-purple-50 text-purple-700'}`}>{l.estado}</span>
+                                    </td>
+                                    <td className="px-2 py-1 text-gray-500">{l.fecha_dev_real || '—'}</td>
+                                    <td className="px-2 py-1 text-right">
+                                      {l.estado === 'En obra' && (
+                                        <button onClick={() => devolverEquipo(l)} className="text-xs text-green-600 hover:underline font-semibold">Devolver</button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 )
               })}
             </tbody>

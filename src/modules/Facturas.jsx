@@ -116,10 +116,32 @@ let error
         }))
         if (lineas.length > 0) await supabase.from('alquiler_lineas').insert(lineas)
         if (refacturando.length > 0) {
-          const ids = refacturando.map(r => r.id)
-          await supabase.from('alquiler_lineas')
-            .update({ estado: 'Refacturado', refactura_id: res.data.id })
-            .in('id', ids)
+          for (const r of refacturando) {
+            const cantMax = parseFloat(r.cantidad) || 1
+            const cant = parseFloat(r.cantRefac) || cantMax
+            if (cant >= cantMax) {
+              await supabase.from('alquiler_lineas')
+                .update({ estado: 'Refacturado', refactura_id: res.data.id })
+                .eq('id', r.id)
+            } else {
+              await supabase.from('alquiler_lineas')
+                .update({ cantidad: cantMax - cant, subtotal: (cantMax - cant) * (parseFloat(r.dias)||0) * (parseFloat(r.tarifa)||0) })
+                .eq('id', r.id)
+              await supabase.from('alquiler_lineas').insert([{
+                contrato_id: r.contrato_id,
+                equipo_id: r.equipo_id,
+                nombre: r.nombre,
+                cantidad: cant,
+                dias: r.dias,
+                tarifa: r.tarifa,
+                subtotal: cant * (parseFloat(r.dias)||0) * (parseFloat(r.tarifa)||0),
+                fecha_salida: r.fecha_salida,
+                fecha_est_dev: r.fecha_est_dev,
+                estado: 'Refacturado',
+                refactura_id: res.data.id
+              }])
+            }
+          }
         }
       }
     }
@@ -140,20 +162,62 @@ let error
     await cargarDatos()
   }
   async function devolverEquipo(linea) {
+    const cantMax = parseFloat(linea.cantidad) || 1
+    let cant = cantMax
+    if (cantMax > 1) {
+      const resp = window.prompt(`¿Cuántas unidades devuelve? (disponibles: ${cantMax})`, cantMax)
+      if (resp === null) return
+      cant = parseFloat(resp)
+      if (!cant || cant <= 0 || cant > cantMax) { setMensaje('Cantidad inválida'); return }
+    }
     const fecha = window.prompt('Fecha de devolución (AAAA-MM-DD):', new Date().toISOString().slice(0,10))
     if (!fecha) return
-    const { error } = await supabase.from('alquiler_lineas')
-      .update({ estado: 'Devuelto', fecha_dev_real: fecha })
-      .eq('id', linea.id)
-    if (error) { setMensaje('Error: ' + error.message); return }
-    setMensaje('✓ Equipo devuelto: ' + linea.nombre)
+
+    if (cant === cantMax) {
+      // Devuelve toda la línea
+      const { error } = await supabase.from('alquiler_lineas')
+        .update({ estado: 'Devuelto', fecha_dev_real: fecha })
+        .eq('id', linea.id)
+      if (error) { setMensaje('Error: ' + error.message); return }
+    } else {
+      // Devuelve parte: reduce la original y crea una fila devuelta
+      await supabase.from('alquiler_lineas')
+        .update({ cantidad: cantMax - cant, subtotal: (cantMax - cant) * (parseFloat(linea.dias)||0) * (parseFloat(linea.tarifa)||0) })
+        .eq('id', linea.id)
+      await supabase.from('alquiler_lineas').insert([{
+        contrato_id: linea.contrato_id,
+        equipo_id: linea.equipo_id,
+        nombre: linea.nombre,
+        cantidad: cant,
+        dias: linea.dias,
+        tarifa: linea.tarifa,
+        subtotal: cant * (parseFloat(linea.dias)||0) * (parseFloat(linea.tarifa)||0),
+        fecha_salida: linea.fecha_salida,
+        fecha_est_dev: linea.fecha_est_dev,
+        estado: 'Devuelto',
+        fecha_dev_real: fecha
+      }])
+    }
+    setMensaje('✓ Devolución registrada: ' + linea.nombre + ' (' + cant + ')')
     await cargarDatos()
   }
   function iniciarRefacturacion(contrato) {
     const seleccionados = seleccionRefac.filter(s => s.contrato_id === contrato.id)
     if (seleccionados.length === 0) return
+    const conCantidad = []
+    for (const s of seleccionados) {
+      const cantMax = parseFloat(s.cantidad) || 1
+      let cant = cantMax
+      if (cantMax > 1) {
+        const resp = window.prompt(`${s.nombre}: ¿cuántas unidades continúan? (disponibles: ${cantMax})`, cantMax)
+        if (resp === null) return
+        cant = parseFloat(resp)
+        if (!cant || cant <= 0 || cant > cantMax) { setMensaje('Cantidad inválida en ' + s.nombre); return }
+      }
+      conCantidad.push({ ...s, cantRefac: cant })
+    }
     setEditandoId(null)
-    setRefacturando(seleccionados)
+    setRefacturando(conCantidad)
     setForm({
       cliente_id: contrato.cliente_id || '',
       estado: 'Activo',
@@ -162,13 +226,13 @@ let error
       ubicacion: contrato.ubicacion || '',
       unidad_negocio: 'ALQ',
       observaciones: 'Refacturación de ' + (contrato.id_doc || ''),
-      items: seleccionados.map(s => ({
+      items: conCantidad.map(s => ({
         equipo_id: s.equipo_id || '',
         nombre: s.nombre || '',
-        cantidad: parseFloat(s.cantidad) || 1,
+        cantidad: s.cantRefac,
         dias: 1,
         tarifa: parseFloat(s.tarifa) || 0,
-        subtotal: parseFloat(s.tarifa) || 0
+        subtotal: s.cantRefac * (parseFloat(s.tarifa) || 0)
       })),
       transporte: 0, descuento: 0, anticipo: 0
     })

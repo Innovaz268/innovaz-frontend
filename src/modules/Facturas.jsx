@@ -2,6 +2,7 @@ import { siguienteConsecutivo } from '../utils/consecutivo'
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { asientoFactura } from '../utils/asientosAuto'
+import { moverKardex } from '../utils/kardexAuto'
 
 function Facturas() {
   const [contratos, setContratos] = useState([])
@@ -115,6 +116,19 @@ let error
           estado: 'En obra'
         }))
         if (lineas.length > 0) await supabase.from('alquiler_lineas').insert(lineas)
+          if (refacturando.length === 0) {
+          for (const it of form.items) {
+            if (it.equipo_id) {
+              await moverKardex({
+                equipo_id: it.equipo_id,
+                tipo: 'Salida',
+                cantidad: it.cantidad,
+                contrato_id: res.data.id,
+                observacion: 'Alquiler ' + (codigo || '')
+              })
+            }
+          }
+        }
         if (refacturando.length > 0) {
           for (const r of refacturando) {
             const cantMax = parseFloat(r.cantidad) || 1
@@ -197,6 +211,15 @@ let error
         estado: 'Devuelto',
         fecha_dev_real: fecha
       }])
+    }
+    if (linea.equipo_id) {
+      await moverKardex({
+        equipo_id: linea.equipo_id,
+        tipo: 'Entrada',
+        cantidad: cant,
+        contrato_id: linea.contrato_id,
+        observacion: 'Devolución equipo'
+      })
     }
     setMensaje('✓ Devolución registrada: ' + linea.nombre + ' (' + cant + ')')
     await cargarDatos()

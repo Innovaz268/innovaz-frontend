@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { moverKardex } from '../utils/kardexAuto'
 
 function Equipos() {
   const [equipos, setEquipos] = useState([])
@@ -39,14 +40,22 @@ function Equipos() {
     if (!form.nombre.trim()) { setMensaje('El nombre es obligatorio'); return }
     setGuardando(true)
     setMensaje('')
-    const datos = { ...form, tarifa: parseFloat(form.tarifa) || 0, stock: parseInt(form.stock) || 0, costo_compra: parseFloat(form.costo_compra) || 0 }
+    const datos = { ...form, tarifa: parseFloat(form.tarifa) || 0, stock: editandoId ? (parseInt(form.stock) || 0) : 0, costo_compra: parseFloat(form.costo_compra) || 0 }
     let error
     if (editandoId) {
       const res = await supabase.from('equipos').update(datos).eq('id', editandoId)
       error = res.error
     } else {
-      const res = await supabase.from('equipos').insert([datos])
+      const res = await supabase.from('equipos').insert([datos]).select().single()
       error = res.error
+      if (!error && res.data && (parseInt(form.stock) || 0) > 0) {
+        await moverKardex({
+          equipo_id: res.data.id,
+          tipo: 'Entrada',
+          cantidad: parseInt(form.stock) || 0,
+          observacion: 'Compra inicial de equipo'
+        })
+      }
     }
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
     setMensaje(editandoId ? '✓ Actualizado' : '✓ Guardado')

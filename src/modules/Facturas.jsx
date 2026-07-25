@@ -9,6 +9,8 @@ function Facturas() {
   const [equipos, setEquipos] = useState([])
   const [lineas, setLineas] = useState([])
   const [verLineas, setVerLineas] = useState(null)
+  const [refacturando, setRefacturando] = useState([])
+  const [seleccionRefac, setSeleccionRefac] = useState([])
   const [loading, setLoading] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
@@ -39,6 +41,8 @@ function Facturas() {
 
   function abrirNuevo() {
     setEditandoId(null)
+    setRefacturando([])
+    setSeleccionRefac([])
     setForm({ cliente_id: '', estado: 'Activo', fecha_salida: new Date().toISOString().slice(0,10), fecha_est_dev: '', ubicacion: '', unidad_negocio: 'ALQ', observaciones: '', items: [], transporte: 0, descuento: 0, anticipo: 0 })
     setMostrarForm(true)
     setMensaje('')
@@ -111,12 +115,20 @@ let error
           estado: 'En obra'
         }))
         if (lineas.length > 0) await supabase.from('alquiler_lineas').insert(lineas)
+        if (refacturando.length > 0) {
+          const ids = refacturando.map(r => r.id)
+          await supabase.from('alquiler_lineas')
+            .update({ estado: 'Refacturado', refactura_id: res.data.id })
+            .in('id', ids)
+        }
       }
     }
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
     if (!editandoId) await asientoFactura({ ...datos, id_doc: codigo })
     setMensaje(editandoId ? 'Factura actualizada' : 'Factura creada')  
     setMostrarForm(false)
+    setRefacturando([])
+    setSeleccionRefac([])
     setEditandoId(null)
     await cargarDatos()
     setGuardando(false)
@@ -137,7 +149,34 @@ let error
     setMensaje('✓ Equipo devuelto: ' + linea.nombre)
     await cargarDatos()
   }
-
+  function iniciarRefacturacion(contrato) {
+    const seleccionados = seleccionRefac.filter(s => s.contrato_id === contrato.id)
+    if (seleccionados.length === 0) return
+    setEditandoId(null)
+    setRefacturando(seleccionados)
+    setForm({
+      cliente_id: contrato.cliente_id || '',
+      estado: 'Activo',
+      fecha_salida: new Date().toISOString().slice(0,10),
+      fecha_est_dev: '',
+      ubicacion: contrato.ubicacion || '',
+      unidad_negocio: 'ALQ',
+      observaciones: 'Refacturación de ' + (contrato.id_doc || ''),
+      items: seleccionados.map(s => ({
+        equipo_id: s.equipo_id || '',
+        nombre: s.nombre || '',
+        cantidad: parseFloat(s.cantidad) || 1,
+        dias: 1,
+        tarifa: parseFloat(s.tarifa) || 0,
+        subtotal: parseFloat(s.tarifa) || 0
+      })),
+      transporte: 0, descuento: 0, anticipo: 0
+    })
+    setMostrarForm(true)
+    setVerLineas(null)
+    setMensaje('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
   const estadoBadge = estado => {
     const colores = { Activo: 'bg-green-50 text-green-700', Cerrado: 'bg-gray-100 text-gray-600', Cancelado: 'bg-red-50 text-red-700' }
     return colores[estado] || 'bg-gray-100 text-gray-600'
@@ -369,13 +408,29 @@ let error
                                     <td className="px-2 py-1 text-gray-500">{l.fecha_dev_real || '—'}</td>
                                     <td className="px-2 py-1 text-right">
                                       {l.estado === 'En obra' && (
-                                        <button onClick={() => devolverEquipo(l)} className="text-xs text-green-600 hover:underline font-semibold">Devolver</button>
+                                        <div className="flex gap-2 justify-end items-center">
+                                          <button onClick={() => devolverEquipo(l)} className="text-xs text-green-600 hover:underline font-semibold">Devolver</button>
+                                          <label className="text-xs text-purple-600 flex items-center gap-1 cursor-pointer">
+                                            <input type="checkbox"
+                                              checked={seleccionRefac.some(s => s.id === l.id)}
+                                              onChange={() => setSeleccionRefac(seleccionRefac.some(s => s.id === l.id) ? seleccionRefac.filter(s => s.id !== l.id) : [...seleccionRefac, l])} />
+                                            Refacturar
+                                          </label>
+                                        </div>
                                       )}
                                     </td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
+                          )}
+                          {seleccionRefac.filter(s => s.contrato_id === c.id).length > 0 && (
+                            <div className="flex justify-end mt-2">
+                              <button onClick={() => iniciarRefacturacion(c)}
+                                className="px-4 py-1.5 bg-[#5B21B6] text-white text-xs font-bold rounded-lg hover:opacity-90">
+                                Refacturar seleccionados ({seleccionRefac.filter(s => s.contrato_id === c.id).length})
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>

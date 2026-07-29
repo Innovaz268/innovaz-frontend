@@ -10,6 +10,7 @@ import Caja from './modules/Caja'
 import Flujo from './modules/Flujo'
 import Muebles from './modules/Muebles'
 import Contabilidad from './modules/Contabilidad'
+import Informes from './modules/Informes'
 
 function App() {
   const [email, setEmail] = useState('')
@@ -52,6 +53,7 @@ function App() {
         {modulo === 'caja' && <Caja />}
         {modulo === 'muebles' && <Muebles />}
         {modulo === 'contabilidad' && <Contabilidad />}
+        {modulo === 'informes' && <Informes />}
       </Layout>
     )
   }

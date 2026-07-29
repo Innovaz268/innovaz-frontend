@@ -9,6 +9,7 @@ function Layout({ user, onLogout, moduloActivo, onModulo, children }) {
     { id: 'clientes', label: '👥 Clientes' },
     { id: 'contabilidad', label: '📒 Contabilidad' },
     { id: 'muebles', label: '🪵 Diseño' },
+    { id: 'informes', label: '📊 Informes' },
   ]
 
   return (

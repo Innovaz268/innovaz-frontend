@@ -77,7 +77,7 @@ async function cargarDatos() {
   async function guardarCotizacion() {
     if (!form.cliente_id) { setMensaje('Seleccione un cliente'); return }
     setGuardando(true)
-    const datos = { ...form, total: totalCot, vigencia: form.vigencia || null, fecha: form.fecha || null }
+    const datos = { ...form, total: totalCot, valor: parseFloat(form.valor) || 0, descuento: parseFloat(form.descuento) || 0, anticipo: parseFloat(form.anticipo) || 0, vigencia: form.vigencia || null, fecha: form.fecha || null }
     let error
     if (editandoId) {
       const res = await supabase.from('muebles_cotizaciones').update(datos).eq('id', editandoId)

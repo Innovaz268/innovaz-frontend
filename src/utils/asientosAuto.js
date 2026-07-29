@@ -1,44 +1,44 @@
 import { supabase } from '../supabase'
 import { siguienteConsecutivo } from './consecutivo'
 
-// Cuentas segun metodo de pago
+// Cuentas segun metodo de pago (NIIF)
 function cuentaCaja(metodo) {
   const cuentas = {
-    'Efectivo': { codigo: '1105', nombre: 'Caja General' },
+    'Efectivo': { codigo: '110505', nombre: 'Caja general' },
     'Transferencia': { codigo: '1110', nombre: 'Bancos' },
     'Nequi': { codigo: '1110', nombre: 'Bancos' },
     'Daviplata': { codigo: '1110', nombre: 'Bancos' },
     'Cheque': { codigo: '1110', nombre: 'Bancos' },
     'Tarjeta': { codigo: '1110', nombre: 'Bancos' },
   }
-  return cuentas[metodo] || { codigo: '1105', nombre: 'Caja General' }
+  return cuentas[metodo] || { codigo: '110505', nombre: 'Caja general' }
 }
 
-// Cuenta de costo segun el tipo (auxiliares de 6120 Industrias Manufactureras)
+// Cuenta de costo de produccion de muebles segun el tipo (auxiliares de 5110)
 function cuentaCosto(tipo) {
   const cuentas = {
-    'Material': { codigo: '612005', nombre: 'Materia Prima' },
-    'Mano de obra': { codigo: '612010', nombre: 'Mano de Obra' },
-    'Transporte': { codigo: '612015', nombre: 'Costos Indirectos' },
-    'Otro': { codigo: '612015', nombre: 'Costos Indirectos' },
+    'Material': { codigo: '511005', nombre: 'Materia prima' },
+    'Mano de obra': { codigo: '511010', nombre: 'Mano de obra' },
+    'Transporte': { codigo: '511015', nombre: 'Costos indirectos' },
+    'Otro': { codigo: '511015', nombre: 'Costos indirectos' },
   }
-  return cuentas[tipo] || { codigo: '612015', nombre: 'Costos Indirectos' }
+  return cuentas[tipo] || { codigo: '511015', nombre: 'Costos indirectos' }
 }
 
-// Contrapartida segun como se pago el costo
+// Contrapartida segun como se pago el costo (NIIF)
 function cuentaFuente(metodo) {
   const cuentas = {
-    'Efectivo': { codigo: '1105', nombre: 'Caja General' },
+    'Efectivo': { codigo: '110505', nombre: 'Caja general' },
     'Transferencia': { codigo: '1110', nombre: 'Bancos' },
     'Nequi': { codigo: '1110', nombre: 'Bancos' },
     'Daviplata': { codigo: '1110', nombre: 'Bancos' },
-    'Credito': { codigo: '2205', nombre: 'Proveedores Nacionales' },
+    'Credito': { codigo: '2205', nombre: 'Proveedores nacionales' },
   }
-  return cuentas[metodo] || { codigo: '1105', nombre: 'Caja General' }
+  return cuentas[metodo] || { codigo: '110505', nombre: 'Caja general' }
 }
 
 // Asiento al crear una FACTURA DE ALQUILER
-// Debito: 1305 Clientes / Credito: 4175 Alquiler de Bienes Muebles
+// Debito: 1305 Clientes / Credito: 4105 Alquiler de equipos
 export async function asientoFactura(factura) {
   try {
     const { data: asiento, error } = await supabase
@@ -65,8 +65,8 @@ export async function asientoFactura(factura) {
       },
       {
         asiento_id: asiento.id,
-        cuenta_codigo: '4175',
-        cuenta_nombre: 'Alquiler de Bienes Muebles',
+        cuenta_codigo: '4105',
+        cuenta_nombre: 'Alquiler de equipos',
         debe: 0,
         haber: factura.total || 0,
         tercero_id: factura.cliente_id || ''
@@ -78,7 +78,7 @@ export async function asientoFactura(factura) {
 }
 
 // Asiento al registrar un PAGO EN CAJA
-// Debito: 1105 Caja (o banco) / Credito: 1305 Clientes
+// Debito: 110505 Caja (o banco) / Credito: 1305 Clientes
 export async function asientoPago(pago, clienteId) {
   try {
     const cuentaPago = cuentaCaja(pago.metodo)
@@ -119,8 +119,8 @@ export async function asientoPago(pago, clienteId) {
 }
 
 // Asiento al aprobar una COTIZACION DE MUEBLE
-// Debito: 1305 Clientes / Credito: 4120 Industrias Manufactureras
-// Si hay anticipo: Debito 1105 Caja / Credito 1305 Clientes
+// Debito: 1305 Clientes / Credito: 4110 Fabricacion y venta de muebles
+// Si hay anticipo: Debito 110505 Caja / Credito 1305 Clientes
 export async function asientoMueble(cotizacion) {
   try {
     const { data: asiento, error } = await supabase
@@ -147,8 +147,8 @@ export async function asientoMueble(cotizacion) {
       },
       {
         asiento_id: asiento.id,
-        cuenta_codigo: '4120',
-        cuenta_nombre: 'Industrias Manufactureras',
+        cuenta_codigo: '4110',
+        cuenta_nombre: 'Fabricación y venta de muebles',
         debe: 0,
         haber: cotizacion.total || 0,
         tercero_id: cotizacion.cliente_id || ''
@@ -174,8 +174,8 @@ export async function asientoMueble(cotizacion) {
       await supabase.from('asientos_lineas').insert([
         {
           asiento_id: asientoAnt.id,
-          cuenta_codigo: '1105',
-          cuenta_nombre: 'Caja General',
+          cuenta_codigo: '110505',
+          cuenta_nombre: 'Caja general',
           debe: anticipo,
           haber: 0,
           tercero_id: cotizacion.cliente_id || ''
@@ -196,8 +196,8 @@ export async function asientoMueble(cotizacion) {
 }
 
 // Asiento con los COSTOS ACUMULADOS de una orden de mueble
-// Debito: 612005 / 612010 / 612015 segun el tipo de costo
-// Credito: 1105 Caja, 1110 Bancos o 2205 Proveedores segun como se pago
+// Debito: 511005 / 511010 / 511015 segun el tipo de costo
+// Credito: 110505 Caja, 1110 Bancos o 2205 Proveedores segun como se pago
 export async function asientoCostosMueble(orden, costosOrden) {
   try {
     const total = costosOrden.reduce((s, c) => s + (parseFloat(c.valor) || 0), 0)

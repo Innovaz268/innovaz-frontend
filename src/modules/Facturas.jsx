@@ -255,7 +255,8 @@ let error
         cantidad: s.cantRefac,
         dias: 1,
         tarifa: parseFloat(s.tarifa) || 0,
-        subtotal: s.cantRefac * (parseFloat(s.tarifa) || 0)
+        subtotal: s.cantRefac * (parseFloat(s.tarifa) || 0),
+        bloqueado: true
       })),
       transporte: 0, descuento: 0, anticipo: 0
     })
@@ -362,7 +363,7 @@ let error
                             {equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
                           </select>
                         </td>
-                        <td className="px-2 py-1"><input type="number" value={item.cantidad} onChange={e => actualizarItem(i, 'cantidad', e.target.value)} className="w-16 px-2 py-1 border border-gray-200 rounded text-xs" min="1" /></td>
+                        <td className="px-2 py-1"><input type="number" value={item.cantidad} onChange={e => actualizarItem(i, 'cantidad', e.target.value)} disabled={item.bloqueado} className={`w-16 px-2 py-1 border border-gray-200 rounded text-xs ${item.bloqueado ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`} min="1" title={item.bloqueado ? 'Cantidad fija por refacturación' : ''} /></td>
                         <td className="px-2 py-1"><input type="number" value={item.dias} onChange={e => actualizarItem(i, 'dias', e.target.value)} className="w-16 px-2 py-1 border border-gray-200 rounded text-xs" min="1" /></td>
                         <td className="px-2 py-1"><input type="number" value={item.tarifa} onChange={e => actualizarItem(i, 'tarifa', e.target.value)} className="w-24 px-2 py-1 border border-gray-200 rounded text-xs" /></td>
                         <td className="px-2 py-1 font-semibold text-[#185FA5]">{fmt(item.subtotal)}</td>

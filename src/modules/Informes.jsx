@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { exportarExcel } from '../utils/exportarExcel'
 
 function Informes() {
   const [lineas, setLineas] = useState([])
   const [cuentas, setCuentas] = useState([])
   const [loading, setLoading] = useState(true)
+  const [informe, setInforme] = useState('resultados')
+  const [terceros, setTerceros] = useState([])
   const hoy = new Date().toISOString().slice(0, 10)
   const inicioMes = hoy.slice(0, 8) + '01'
   const [desde, setDesde] = useState(inicioMes)
@@ -14,9 +17,10 @@ function Informes() {
 
   async function cargarDatos() {
     setLoading(true)
-    const [{ data: asc }, { data: cts }] = await Promise.all([
+    const [{ data: asc }, { data: cts }, { data: trcs }] = await Promise.all([
       supabase.from('asientos_contables').select('id, fecha'),
       supabase.from('puc_cuentas').select('codigo, nombre, clase, grupo'),
+      supabase.from('terceros').select('id, nombre'),
     ])
     const { data: lns } = await supabase.from('asientos_lineas').select('*')
     // Enlazar cada linea con la fecha de su asiento
@@ -25,7 +29,32 @@ function Informes() {
     const conFecha = (lns || []).map(l => ({ ...l, fecha: fechas[l.asiento_id] }))
     setLineas(conFecha)
     setCuentas(cts || [])
+    setTerceros(trcs || [])
     setLoading(false)
+  }
+
+  function exportarEstadoResultados() {
+    const filas = []
+    filas.push({ Concepto: 'INGRESOS DE ACTIVIDADES ORDINARIAS', Valor: ingresosOrd })
+    detIngresos.forEach(d => filas.push({ Concepto: '   ' + d.codigo + ' - ' + d.nombre, Valor: d.valor }))
+    filas.push({ Concepto: '(-) COSTO DE VENTAS', Valor: -costos })
+    detCostos.forEach(d => filas.push({ Concepto: '   ' + d.codigo + ' - ' + d.nombre, Valor: d.valor }))
+    filas.push({ Concepto: '= UTILIDAD BRUTA', Valor: utilidadBruta })
+    filas.push({ Concepto: '(-) GASTOS OPERACIONALES', Valor: -gastos })
+    detGastos.forEach(d => filas.push({ Concepto: '   ' + d.codigo + ' - ' + d.nombre, Valor: d.valor }))
+    filas.push({ Concepto: '= UTILIDAD OPERACIONAL', Valor: utilidadOperacional })
+    if (detOtros.length > 0) {
+      filas.push({ Concepto: '(+) OTROS INGRESOS', Valor: otrosIngresos })
+      detOtros.forEach(d => filas.push({ Concepto: '   ' + d.codigo + ' - ' + d.nombre, Valor: d.valor }))
+    }
+    filas.push({ Concepto: '= UTILIDAD NETA DEL PERIODO', Valor: utilidadNeta })
+    exportarExcel(filas, `estado-resultados_${desde}_a_${hasta}`, 'Estado de Resultados')
+  }
+
+  function exportarCartera() {
+    const filas = carteraPorCliente.map(c => ({ Cliente: c.nombre, Saldo: c.saldo }))
+    filas.push({ Cliente: 'TOTAL CARTERA', Saldo: totalCartera })
+    exportarExcel(filas, `cartera_al_${hasta}`, 'Cartera')
   }
 
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
@@ -58,6 +87,22 @@ function Informes() {
   const utilidadBruta = ingresosOrd - costos
   const utilidadOperacional = utilidadBruta - gastos
   const utilidadNeta = utilidadOperacional + otrosIngresos
+  // CARTERA POR CLIENTE: saldo de la cuenta 1305 Clientes por tercero, hasta la fecha de corte
+  const nombreTercero = id => terceros.find(t => t.id === id)?.nombre || '(sin identificar)'
+  const carteraHasta = lineas.filter(l => l.fecha && l.fecha <= hasta && l.cuenta_codigo === '1305')
+  const carteraPorCliente = (() => {
+    const map = {}
+    carteraHasta.forEach(l => {
+      const key = l.tercero_id || 'sin'
+      if (!map[key]) map[key] = 0
+      map[key] += (l.debe - l.haber)
+    })
+    return Object.entries(map)
+      .map(([id, saldo]) => ({ id, nombre: nombreTercero(id), saldo }))
+      .filter(c => Math.round(c.saldo) !== 0)
+      .sort((a, b) => b.saldo - a.saldo)
+  })()
+  const totalCartera = carteraPorCliente.reduce((s, c) => s + c.saldo, 0)
 
   // Detalle por cuenta dentro de una clase/grupo
   const detalle = (filtro) => {
@@ -83,13 +128,24 @@ function Informes() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-4 mt-2">
-        <div>
-          <h2 className="text-xl font-bold text-[#185FA5]">📊 Estado de Resultados</h2>
-          <p className="text-xs text-gray-400">Bajo NIIF para PYMES</p>
-        </div>
+      <div className="mb-4 mt-2">
+        <h2 className="text-xl font-bold text-[#185FA5]">📊 Informes</h2>
+        <p className="text-xs text-gray-400">Bajo NIIF para PYMES</p>
       </div>
 
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {[
+          { id: 'resultados', label: 'Estado de Resultados' },
+          { id: 'cartera', label: 'Cartera por cliente' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setInforme(t.id)}
+            className={`px-3 py-2 text-xs font-bold rounded-lg ${informe === t.id ? 'bg-[#185FA5] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {informe === 'resultados' && (<>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end">
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Desde</label>
@@ -137,6 +193,56 @@ function Informes() {
             </div>
           </div>
         </div>
+      )}
+      </>)}
+
+      {informe === 'cartera' && (
+        <>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end justify-between">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Corte a la fecha</label>
+            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          </div>
+          <button onClick={exportarCartera}
+            className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            ⬇ Exportar Excel
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
+        ) : carteraPorCliente.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">No hay cartera pendiente al corte</div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <span className="text-sm font-bold text-gray-700">Cartera al {hasta}</span>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Cliente</th>
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {carteraPorCliente.map(c => (
+                  <tr key={c.id} className="border-t border-gray-50 hover:bg-gray-50">
+                    <td className="px-4 py-2 text-xs font-semibold">{c.nombre}</td>
+                    <td className="px-4 py-2 text-xs text-right font-semibold text-red-600">{fmt(c.saldo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-300 bg-gray-50">
+                  <td className="px-4 py-2 text-sm font-bold">TOTAL CARTERA</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-[#185FA5]">{fmt(totalCartera)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+        </>
       )}
     </div>
   )

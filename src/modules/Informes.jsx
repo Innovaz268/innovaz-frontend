@@ -13,21 +13,28 @@ function Informes() {
   const [desde, setDesde] = useState(inicioMes)
   const [hasta, setHasta] = useState(hoy)
   const [cuentaAux, setCuentaAux] = useState('')
+  const [nitAux, setNitAux] = useState('')
 
   useEffect(() => { cargarDatos() }, [])
 
   async function cargarDatos() {
     setLoading(true)
     const [{ data: asc }, { data: cts }, { data: trcs }] = await Promise.all([
-      supabase.from('asientos_contables').select('id, fecha'),
+      supabase.from('asientos_contables').select('id, fecha, documento_id, tipo_doc, descripcion'),
       supabase.from('puc_cuentas').select('codigo, nombre, clase, grupo'),
-      supabase.from('terceros').select('id, nombre'),
+      supabase.from('terceros').select('id, nombre, nit'),
     ])
     const { data: lns } = await supabase.from('asientos_lineas').select('*')
     // Enlazar cada linea con la fecha de su asiento
-    const fechas = {}
-    ;(asc || []).forEach(a => { fechas[a.id] = a.fecha })
-    const conFecha = (lns || []).map(l => ({ ...l, fecha: fechas[l.asiento_id] }))
+    const info = {}
+    ;(asc || []).forEach(a => { info[a.id] = a })
+    const conFecha = (lns || []).map(l => ({
+      ...l,
+      fecha: info[l.asiento_id]?.fecha,
+      documento_id: info[l.asiento_id]?.documento_id,
+      tipo_doc: info[l.asiento_id]?.tipo_doc,
+      descripcion: info[l.asiento_id]?.descripcion
+    }))
     setLineas(conFecha)
     setCuentas(cts || [])
     setTerceros(trcs || [])
@@ -75,16 +82,24 @@ function Informes() {
   }
 
   function exportarAuxiliar() {
-    if (!cuentaAux || movimientosAux.length === 0) { alert('No hay movimientos para exportar'); return }
+    if (movimientosAux.length === 0) { alert('No hay movimientos para exportar'); return }
     const filas = movimientosAux.map(l => ({
       Fecha: l.fecha || '',
+      Cuenta: l.cuenta_codigo + ' - ' + (l.cuenta_nombre || ''),
+      Tercero: nombreTercero(l.tercero_id),
       Debe: l.debe || 0,
       Haber: l.haber || 0,
       Saldo: l.saldo
     }))
-    filas.push({ Fecha: 'TOTALES', Debe: totalDebeAux, Haber: totalHaberAux, Saldo: totalDebeAux - totalHaberAux })
-    const nombre = cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre || cuentaAux
-    exportarExcel(filas, `auxiliar_${cuentaAux}_${desde}_a_${hasta}`, 'Libro auxiliar')
+    filas.push({ Fecha: 'TOTALES', Cuenta: '', Tercero: '', Debe: totalDebeAux, Haber: totalHaberAux, Saldo: totalDebeAux - totalHaberAux })
+    exportarExcel(filas, `auxiliar_${cuentaAux || 'todas'}_${nitAux || ''}_${desde}_a_${hasta}`, 'Libro auxiliar')
+  }
+
+  function exportarSaldosTercero() {
+    if (!cuentaAux || saldosPorTercero.length === 0) { alert('No hay saldos para exportar'); return }
+    const filas = saldosPorTercero.map(x => ({ Tercero: x.nombre, Saldo: x.saldo }))
+    filas.push({ Tercero: 'TOTAL', Saldo: totalSaldosTercero })
+    exportarExcel(filas, `saldos-por-tercero_${cuentaAux}_al_${hasta}`, 'Saldos por tercero')
   }
 
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
@@ -170,10 +185,19 @@ function Informes() {
     })
     .sort((a, b) => a.codigo.localeCompare(b.codigo))
 
+  // Resolver el tercero_id a partir del NIT/cedula digitado
+  const soloDigitos = v => (v ?? '').toString().replace(/\D/g, '')
+  const terceroDelNit = nitAux.trim()
+    ? terceros.find(t => soloDigitos(t.nit) === soloDigitos(nitAux))
+    : null
+  const nitNoEncontrado = nitAux.trim() && !terceroDelNit
+
   const movimientosAux = (() => {
-    if (!cuentaAux) return []
+    if (!cuentaAux && !nitAux.trim()) return []
+    if (nitAux.trim() && !terceroDelNit) return []
     const filtradas = enRango
-      .filter(l => l.cuenta_codigo === cuentaAux)
+      .filter(l => (!cuentaAux || l.cuenta_codigo === cuentaAux))
+      .filter(l => (!terceroDelNit || l.tercero_id === terceroDelNit.id))
       .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''))
     let saldo = 0
     return filtradas.map(l => {
@@ -183,6 +207,24 @@ function Informes() {
   })()
   const totalDebeAux = movimientosAux.reduce((s, l) => s + (l.debe || 0), 0)
   const totalHaberAux = movimientosAux.reduce((s, l) => s + (l.haber || 0), 0)
+
+  // SALDOS POR TERCERO: para la cuenta seleccionada, el saldo de cada tercero hasta el corte
+  const saldosPorTercero = (() => {
+    if (!cuentaAux) return []
+    const cta = cuentas.find(x => x.codigo === cuentaAux)
+    const esDebito = cta ? cta.naturaleza === 'debito' : true
+    const map = {}
+    hastaBal.filter(l => l.cuenta_codigo === cuentaAux).forEach(l => {
+      const key = l.tercero_id || 'sin'
+      if (!map[key]) map[key] = 0
+      map[key] += esDebito ? (l.debe - l.haber) : (l.haber - l.debe)
+    })
+    return Object.entries(map)
+      .map(([id, saldo]) => ({ id, nombre: nombreTercero(id), saldo }))
+      .filter(x => Math.round(x.saldo) !== 0)
+      .sort((a, b) => b.saldo - a.saldo)
+  })()
+  const totalSaldosTercero = saldosPorTercero.reduce((s, x) => s + x.saldo, 0)
 
   // Detalle por cuenta dentro de una clase/grupo
   const detalle = (filtro) => {
@@ -219,6 +261,7 @@ function Informes() {
           { id: 'balance', label: 'Balance General' },
           { id: 'cartera', label: 'Cartera por cliente' },
           { id: 'auxiliar', label: 'Libro auxiliar' },
+          { id: 'terceros', label: 'Saldos por tercero' },
         ].map(t => (
           <button key={t.id} onClick={() => setInforme(t.id)}
             className={`px-3 py-2 text-xs font-bold rounded-lg ${informe === t.id ? 'bg-[#185FA5] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>
@@ -399,12 +442,23 @@ function Informes() {
       {informe === 'auxiliar' && (
         <>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Cuenta</label>
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Cuenta (opcional)</label>
             <select value={cuentaAux} onChange={e => setCuentaAux(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-              <option value="">— Seleccionar cuenta —</option>
+              <option value="">— Todas las cuentas —</option>
               {cuentasConMovimiento.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.nombre}</option>)}
             </select>
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">NIT / Cédula (opcional)</label>
+            <input value={nitAux} onChange={e => setNitAux(e.target.value)} list="lista-nits" placeholder="Digite NIT o cédula"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+            <datalist id="lista-nits">
+              {terceros.filter(t => t.nit).map(t => <option key={t.id} value={t.nit}>{t.nombre}</option>)}
+            </datalist>
+            {terceroDelNit && <p className="text-xs text-green-600 mt-1">✓ {terceroDelNit.nombre}</p>}
+            {nitNoEncontrado && <p className="text-xs text-red-500 mt-1">NIT no encontrado</p>}
+            
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Desde</label>
@@ -420,19 +474,26 @@ function Informes() {
           </button>
         </div>
 
-        {!cuentaAux ? (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Seleccione una cuenta para ver sus movimientos</div>
+        {!cuentaAux && !nitAux.trim() ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Seleccione una cuenta o digite un NIT para ver los movimientos</div>
         ) : movimientosAux.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Sin movimientos en el periodo</div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-              <span className="text-sm font-bold text-gray-700">{cuentaAux} · {cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre} — del {desde} al {hasta}</span>
+              <span className="text-sm font-bold text-gray-700">
+                {cuentaAux ? `${cuentaAux} · ${cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre}` : 'Todas las cuentas'}
+                {terceroDelNit ? ` · ${terceroDelNit.nombre}` : ''}
+                {' '}— del {desde} al {hasta}
+              </span>
             </div>
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Fecha</th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Documento</th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Cuenta</th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Tercero</th>
                   <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Debe</th>
                   <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Haber</th>
                   <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Saldo</th>
@@ -442,6 +503,9 @@ function Informes() {
                 {movimientosAux.map(l => (
                   <tr key={l.id} className="border-t border-gray-50 hover:bg-gray-50">
                     <td className="px-4 py-2 text-xs text-gray-500">{l.fecha || '—'}</td>
+                    <td className="px-4 py-2 text-xs text-[#185FA5] font-semibold">{l.documento_id || '—'}</td>
+                    <td className="px-4 py-2 text-xs text-gray-500">{l.cuenta_codigo} · {l.cuenta_nombre}</td>
+                    <td className="px-4 py-2 text-xs text-gray-500">{nombreTercero(l.tercero_id)}</td>
                     <td className="px-4 py-2 text-xs text-right">{l.debe ? fmt(l.debe) : ''}</td>
                     <td className="px-4 py-2 text-xs text-right">{l.haber ? fmt(l.haber) : ''}</td>
                     <td className="px-4 py-2 text-xs text-right font-semibold">{fmt(l.saldo)}</td>
@@ -454,6 +518,62 @@ function Informes() {
                   <td className="px-4 py-2 text-sm text-right font-bold">{fmt(totalDebeAux)}</td>
                   <td className="px-4 py-2 text-sm text-right font-bold">{fmt(totalHaberAux)}</td>
                   <td className="px-4 py-2 text-sm text-right font-bold text-[#185FA5]">{fmt(totalDebeAux - totalHaberAux)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+        </>
+      )}
+
+      {informe === 'terceros' && (
+        <>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Cuenta</label>
+            <select value={cuentaAux} onChange={e => setCuentaAux(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+              <option value="">— Seleccionar cuenta —</option>
+              {cuentasConMovimiento.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Corte a la fecha</label>
+            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          </div>
+          <button onClick={exportarSaldosTercero}
+            className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            ⬇ Exportar Excel
+          </button>
+        </div>
+
+        {!cuentaAux ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Seleccione una cuenta para ver sus saldos por tercero</div>
+        ) : saldosPorTercero.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Sin saldos en esta cuenta al corte</div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <span className="text-sm font-bold text-gray-700">{cuentaAux} · {cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre} — saldos al {hasta}</span>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Tercero</th>
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {saldosPorTercero.map(x => (
+                  <tr key={x.id} className="border-t border-gray-50 hover:bg-gray-50">
+                    <td className="px-4 py-2 text-xs font-semibold">{x.nombre}</td>
+                    <td className="px-4 py-2 text-xs text-right font-semibold">{fmt(x.saldo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-300 bg-gray-50">
+                  <td className="px-4 py-2 text-sm font-bold">TOTAL</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-[#185FA5]">{fmt(totalSaldosTercero)}</td>
                 </tr>
               </tfoot>
             </table>

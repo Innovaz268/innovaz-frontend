@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { moverKardex } from '../utils/kardexAuto'
+import { asientoCompraEquipo } from '../utils/asientosAuto'
 
 function Equipos() {
   const [equipos, setEquipos] = useState([])
@@ -8,9 +9,9 @@ function Equipos() {
   const [busqueda, setBusqueda] = useState('')
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
-  const [form, setForm] = useState({ nombre: '', categoria: '', tarifa: '', stock: '', costo_compra: '', proveedor: '' })
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
+  const [form, setForm] = useState({ nombre: '', categoria: '', tarifa: '', stock: '', costo_compra: '', proveedor: '', forma_pago: 'Contado' })
 
   useEffect(() => { cargarEquipos() }, [])
 
@@ -40,7 +41,8 @@ function Equipos() {
     if (!form.nombre.trim()) { setMensaje('El nombre es obligatorio'); return }
     setGuardando(true)
     setMensaje('')
-    const datos = { ...form, tarifa: parseFloat(form.tarifa) || 0, stock: editandoId ? (parseInt(form.stock) || 0) : 0, costo_compra: parseFloat(form.costo_compra) || 0 }
+    const { forma_pago, ...formSinPago } = form
+    const datos = { ...formSinPago, tarifa: parseFloat(form.tarifa) || 0, stock: editandoId ? (parseInt(form.stock) || 0) : 0, costo_compra: parseFloat(form.costo_compra) || 0 }
     let error
     if (editandoId) {
       const res = await supabase.from('equipos').update(datos).eq('id', editandoId)
@@ -55,6 +57,9 @@ function Equipos() {
           cantidad: parseInt(form.stock) || 0,
           observacion: 'Compra inicial de equipo'
         })
+        if ((parseFloat(form.costo_compra) || 0) > 0) {
+          await asientoCompraEquipo(res.data, form.forma_pago)
+        }
       }
     }
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
@@ -143,6 +148,16 @@ function Equipos() {
               <input value={form.proveedor} onChange={e => setForm({...form, proveedor: e.target.value})}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
                 placeholder="Nombre del proveedor" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Forma de pago</label>
+              <select value={form.forma_pago} onChange={e => setForm({...form, forma_pago: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
+                <option value="Contado">Contado (Caja)</option>
+                <option value="Transferencia">Transferencia (Bancos)</option>
+                <option value="Credito">Crédito con proveedor</option>
+                <option value="Aporte">Aporte de socio</option>
+              </select>
             </div>
           </div>
           <div className="mt-3 flex justify-end">

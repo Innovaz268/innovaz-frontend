@@ -249,3 +249,60 @@ export async function asientoCostosMueble(orden, costosOrden) {
     return { ok: false, msg: 'Error inesperado' }
   }
 }
+// Asiento al COMPRAR un equipo (NIIF)
+// Debito: 1516 Maquinaria y equipo de alquiler
+// Credito: segun forma de pago (contado/transferencia/credito/aporte socio)
+export async function asientoCompraEquipo(equipo, formaPago, terceroId = null) {
+  try {
+    const costo = parseFloat(equipo.costo_compra) || 0
+    const cantidad = parseInt(equipo.stock) || 1
+    const total = costo * cantidad
+    if (total <= 0) return { ok: false, msg: 'El equipo no tiene costo de compra' }
+
+    const fuentes = {
+      'Contado': { codigo: '110505', nombre: 'Caja general' },
+      'Transferencia': { codigo: '1110', nombre: 'Bancos' },
+      'Credito': { codigo: '2205', nombre: 'Proveedores nacionales' },
+      'Aporte': { codigo: '2610', nombre: 'Cuentas por pagar a socios' },
+    }
+    const fuente = fuentes[formaPago] || fuentes['Contado']
+
+    const codigo = await siguienteConsecutivo('CE')
+    const { data: asiento, error } = await supabase
+      .from('asientos_contables')
+      .insert([{
+        fecha: new Date().toISOString().slice(0, 10),
+        descripcion: 'Compra equipo ' + (equipo.nombre || ''),
+        tipo_doc: 'Comprobante de Compra',
+        documento_id: codigo
+      }])
+      .select()
+      .single()
+
+    if (error) { console.error('Error asiento compra:', error); return { ok: false, msg: error.message } }
+
+    await supabase.from('asientos_lineas').insert([
+      {
+        asiento_id: asiento.id,
+        cuenta_codigo: '1516',
+        cuenta_nombre: 'Maquinaria y equipo de alquiler',
+        debe: total,
+        haber: 0,
+        tercero_id: terceroId
+      },
+      {
+        asiento_id: asiento.id,
+        cuenta_codigo: fuente.codigo,
+        cuenta_nombre: fuente.nombre,
+        debe: 0,
+        haber: total,
+        tercero_id: terceroId
+      }
+    ])
+
+    return { ok: true, msg: 'Asiento de compra generado: ' + codigo, codigo, total }
+  } catch (e) {
+    console.error('Error generando asiento de compra:', e)
+    return { ok: false, msg: 'Error inesperado' }
+  }
+}

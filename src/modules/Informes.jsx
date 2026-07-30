@@ -12,6 +12,7 @@ function Informes() {
   const inicioMes = hoy.slice(0, 8) + '01'
   const [desde, setDesde] = useState(inicioMes)
   const [hasta, setHasta] = useState(hoy)
+  const [cuentaAux, setCuentaAux] = useState('')
 
   useEffect(() => { cargarDatos() }, [])
 
@@ -71,6 +72,19 @@ function Informes() {
     filas.push({ Concepto: 'TOTAL PATRIMONIO', Valor: totalPatrimonio })
     filas.push({ Concepto: 'TOTAL PASIVO + PATRIMONIO', Valor: totalPasivoPatrimonio })
     exportarExcel(filas, `balance-general_al_${hasta}`, 'Balance General')
+  }
+
+  function exportarAuxiliar() {
+    if (!cuentaAux || movimientosAux.length === 0) { alert('No hay movimientos para exportar'); return }
+    const filas = movimientosAux.map(l => ({
+      Fecha: l.fecha || '',
+      Debe: l.debe || 0,
+      Haber: l.haber || 0,
+      Saldo: l.saldo
+    }))
+    filas.push({ Fecha: 'TOTALES', Debe: totalDebeAux, Haber: totalHaberAux, Saldo: totalDebeAux - totalHaberAux })
+    const nombre = cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre || cuentaAux
+    exportarExcel(filas, `auxiliar_${cuentaAux}_${desde}_a_${hasta}`, 'Libro auxiliar')
   }
 
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
@@ -147,6 +161,28 @@ function Informes() {
   const totalPatrimonio = detPatrimonio.reduce((s, x) => s + x.valor, 0) + utilidadAcumulada
   const totalPasivoPatrimonio = totalPasivos + totalPatrimonio
   const descuadre = totalActivos - totalPasivoPatrimonio
+  
+  // LIBRO AUXILIAR: movimientos de una cuenta en el periodo, con saldo corriente
+  const cuentasConMovimiento = [...new Set(lineas.map(l => l.cuenta_codigo))]
+    .map(cod => {
+      const c = cuentas.find(x => x.codigo === cod)
+      return { codigo: cod, nombre: c?.nombre || (lineas.find(l => l.cuenta_codigo === cod)?.cuenta_nombre || cod) }
+    })
+    .sort((a, b) => a.codigo.localeCompare(b.codigo))
+
+  const movimientosAux = (() => {
+    if (!cuentaAux) return []
+    const filtradas = enRango
+      .filter(l => l.cuenta_codigo === cuentaAux)
+      .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''))
+    let saldo = 0
+    return filtradas.map(l => {
+      saldo += (l.debe - l.haber)
+      return { ...l, saldo }
+    })
+  })()
+  const totalDebeAux = movimientosAux.reduce((s, l) => s + (l.debe || 0), 0)
+  const totalHaberAux = movimientosAux.reduce((s, l) => s + (l.haber || 0), 0)
 
   // Detalle por cuenta dentro de una clase/grupo
   const detalle = (filtro) => {
@@ -182,6 +218,7 @@ function Informes() {
           { id: 'resultados', label: 'Estado de Resultados' },
           { id: 'balance', label: 'Balance General' },
           { id: 'cartera', label: 'Cartera por cliente' },
+          { id: 'auxiliar', label: 'Libro auxiliar' },
         ].map(t => (
           <button key={t.id} onClick={() => setInforme(t.id)}
             className={`px-3 py-2 text-xs font-bold rounded-lg ${informe === t.id ? 'bg-[#185FA5] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>
@@ -354,6 +391,72 @@ function Informes() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+        </>
+      )}
+
+      {informe === 'auxiliar' && (
+        <>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Cuenta</label>
+            <select value={cuentaAux} onChange={e => setCuentaAux(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
+              <option value="">— Seleccionar cuenta —</option>
+              {cuentasConMovimiento.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} · {c.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Desde</label>
+            <input type="date" value={desde} onChange={e => setDesde(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Hasta</label>
+            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          </div>
+          <button onClick={exportarAuxiliar}
+            className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            ⬇ Exportar Excel
+          </button>
+        </div>
+
+        {!cuentaAux ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Seleccione una cuenta para ver sus movimientos</div>
+        ) : movimientosAux.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Sin movimientos en el periodo</div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <span className="text-sm font-bold text-gray-700">{cuentaAux} · {cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre} — del {desde} al {hasta}</span>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Fecha</th>
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Debe</th>
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Haber</th>
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movimientosAux.map(l => (
+                  <tr key={l.id} className="border-t border-gray-50 hover:bg-gray-50">
+                    <td className="px-4 py-2 text-xs text-gray-500">{l.fecha || '—'}</td>
+                    <td className="px-4 py-2 text-xs text-right">{l.debe ? fmt(l.debe) : ''}</td>
+                    <td className="px-4 py-2 text-xs text-right">{l.haber ? fmt(l.haber) : ''}</td>
+                    <td className="px-4 py-2 text-xs text-right font-semibold">{fmt(l.saldo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-300 bg-gray-50">
+                  <td className="px-4 py-2 text-sm font-bold">TOTALES</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold">{fmt(totalDebeAux)}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold">{fmt(totalHaberAux)}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-[#185FA5]">{fmt(totalDebeAux - totalHaberAux)}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
         </>

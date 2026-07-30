@@ -57,6 +57,22 @@ function Informes() {
     exportarExcel(filas, `cartera_al_${hasta}`, 'Cartera')
   }
 
+  function exportarBalance() {
+    const filas = []
+    filas.push({ Concepto: 'ACTIVOS', Valor: '' })
+    detActivos.forEach(d => filas.push({ Concepto: '   ' + d.codigo + ' - ' + d.nombre, Valor: d.valor }))
+    filas.push({ Concepto: 'TOTAL ACTIVOS', Valor: totalActivos })
+    filas.push({ Concepto: 'PASIVOS', Valor: '' })
+    detPasivos.forEach(d => filas.push({ Concepto: '   ' + d.codigo + ' - ' + d.nombre, Valor: d.valor }))
+    filas.push({ Concepto: 'TOTAL PASIVOS', Valor: totalPasivos })
+    filas.push({ Concepto: 'PATRIMONIO', Valor: '' })
+    detPatrimonio.forEach(d => filas.push({ Concepto: '   ' + d.codigo + ' - ' + d.nombre, Valor: d.valor }))
+    filas.push({ Concepto: '   Resultado del ejercicio', Valor: utilidadAcumulada })
+    filas.push({ Concepto: 'TOTAL PATRIMONIO', Valor: totalPatrimonio })
+    filas.push({ Concepto: 'TOTAL PASIVO + PATRIMONIO', Valor: totalPasivoPatrimonio })
+    exportarExcel(filas, `balance-general_al_${hasta}`, 'Balance General')
+  }
+
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
 
   // Clase de una cuenta segun su codigo (primer digito) o el catalogo
@@ -103,6 +119,34 @@ function Informes() {
       .sort((a, b) => b.saldo - a.saldo)
   })()
   const totalCartera = carteraPorCliente.reduce((s, c) => s + c.saldo, 0)
+  // BALANCE GENERAL: saldos acumulados de cuentas de balance hasta la fecha de corte
+  const hastaBal = lineas.filter(l => l.fecha && l.fecha <= hasta)
+  const saldoClaseBal = (clase, signo) => {
+    const map = {}
+    hastaBal.forEach(l => {
+      const c = cuentas.find(x => x.codigo === l.cuenta_codigo)
+      if (!c || c.clase !== clase) return
+      if (!map[l.cuenta_codigo]) map[l.cuenta_codigo] = { nombre: l.cuenta_nombre, valor: 0 }
+      map[l.cuenta_codigo].valor += (signo === 'debito' ? (l.debe - l.haber) : (l.haber - l.debe))
+    })
+    return Object.entries(map)
+      .map(([codigo, v]) => ({ codigo, ...v }))
+      .filter(x => Math.round(x.valor) !== 0)
+      .sort((a, b) => a.codigo.localeCompare(b.codigo))
+  }
+  const detActivos = saldoClaseBal('Activo', 'debito')
+  const detPasivos = saldoClaseBal('Pasivo', 'credito')
+  const detPatrimonio = saldoClaseBal('Patrimonio', 'credito')
+  const totalActivos = detActivos.reduce((s, x) => s + x.valor, 0)
+  const totalPasivos = detPasivos.reduce((s, x) => s + x.valor, 0)
+  // La utilidad del periodo (resultados acumulados hasta el corte) es parte del patrimonio
+  const ingHasta = hastaBal.filter(l => cuentas.find(x => x.codigo === l.cuenta_codigo)?.clase === 'Ingreso').reduce((s, l) => s + (l.haber - l.debe), 0)
+  const cosHasta = hastaBal.filter(l => cuentas.find(x => x.codigo === l.cuenta_codigo)?.clase === 'Costo').reduce((s, l) => s + (l.debe - l.haber), 0)
+  const gasHasta = hastaBal.filter(l => cuentas.find(x => x.codigo === l.cuenta_codigo)?.clase === 'Gasto').reduce((s, l) => s + (l.debe - l.haber), 0)
+  const utilidadAcumulada = ingHasta - cosHasta - gasHasta
+  const totalPatrimonio = detPatrimonio.reduce((s, x) => s + x.valor, 0) + utilidadAcumulada
+  const totalPasivoPatrimonio = totalPasivos + totalPatrimonio
+  const descuadre = totalActivos - totalPasivoPatrimonio
 
   // Detalle por cuenta dentro de una clase/grupo
   const detalle = (filtro) => {
@@ -136,6 +180,7 @@ function Informes() {
       <div className="flex gap-2 mb-4 flex-wrap">
         {[
           { id: 'resultados', label: 'Estado de Resultados' },
+          { id: 'balance', label: 'Balance General' },
           { id: 'cartera', label: 'Cartera por cliente' },
         ].map(t => (
           <button key={t.id} onClick={() => setInforme(t.id)}
@@ -240,6 +285,75 @@ function Informes() {
                 </tr>
               </tfoot>
             </table>
+          </div>
+        )}
+        </>
+      )}
+
+      {informe === 'balance' && (
+        <>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end justify-between">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Corte a la fecha</label>
+            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          </div>
+          <button onClick={exportarBalance}
+            className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            ⬇ Exportar Excel
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <span className="text-sm font-bold text-gray-700">Estado de Situación Financiera al {hasta}</span>
+            </div>
+            <div className="py-2">
+              <div className="px-4 py-1.5 font-bold text-[#185FA5] border-t border-gray-200">ACTIVOS</div>
+              {detActivos.map(d => (
+                <div key={d.codigo} className="flex justify-between py-1 px-4 pl-8 text-gray-600">
+                  <span className="text-sm">{d.codigo} · {d.nombre}</span><span className="text-sm">{fmt(d.valor)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between py-1.5 px-4 font-bold border-t border-gray-100">
+                <span className="text-sm">TOTAL ACTIVOS</span><span className="text-sm text-[#185FA5]">{fmt(totalActivos)}</span>
+              </div>
+
+              <div className="px-4 py-1.5 font-bold text-[#185FA5] border-t border-gray-200 mt-2">PASIVOS</div>
+              {detPasivos.map(d => (
+                <div key={d.codigo} className="flex justify-between py-1 px-4 pl-8 text-gray-600">
+                  <span className="text-sm">{d.codigo} · {d.nombre}</span><span className="text-sm">{fmt(d.valor)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between py-1.5 px-4 font-bold border-t border-gray-100">
+                <span className="text-sm">TOTAL PASIVOS</span><span className="text-sm">{fmt(totalPasivos)}</span>
+              </div>
+
+              <div className="px-4 py-1.5 font-bold text-[#185FA5] border-t border-gray-200 mt-2">PATRIMONIO</div>
+              {detPatrimonio.map(d => (
+                <div key={d.codigo} className="flex justify-between py-1 px-4 pl-8 text-gray-600">
+                  <span className="text-sm">{d.codigo} · {d.nombre}</span><span className="text-sm">{fmt(d.valor)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between py-1 px-4 pl-8 text-gray-600">
+                <span className="text-sm">Resultado del ejercicio</span><span className="text-sm">{fmt(utilidadAcumulada)}</span>
+              </div>
+              <div className="flex justify-between py-1.5 px-4 font-bold border-t border-gray-100">
+                <span className="text-sm">TOTAL PATRIMONIO</span><span className="text-sm">{fmt(totalPatrimonio)}</span>
+              </div>
+
+              <div className="mx-4 my-2 border-t-2 border-gray-300"></div>
+              <div className="flex justify-between py-2 px-4 font-bold text-lg text-[#185FA5]">
+                <span>TOTAL PASIVO + PATRIMONIO</span><span>{fmt(totalPasivoPatrimonio)}</span>
+              </div>
+              {Math.round(descuadre) !== 0 && (
+                <div className="mx-4 mb-3 p-2 bg-red-50 text-red-700 rounded-lg text-xs font-semibold text-center">
+                  ⚠ Descuadre de {fmt(descuadre)} — Activo ≠ Pasivo + Patrimonio
+                </div>
+              )}
+            </div>
           </div>
         )}
         </>

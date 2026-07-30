@@ -10,6 +10,7 @@ function Layout({ user, onLogout, moduloActivo, onModulo, children }) {
     { id: 'contabilidad', label: '📒 Contabilidad' },
     { id: 'muebles', label: '🪵 Diseño' },
     { id: 'informes', label: '📊 Informes' },
+    ...(user?.email === 'admin@innovaz.com' ? [{ id: 'supervisor', label: '🛠️ Supervisor' }] : []),
   ]
 
   return (

@@ -246,7 +246,7 @@ function Contabilidad() {
                           <select value={linea.cuenta_codigo} onChange={e => actualizarLinea(i, 'cuenta_codigo', e.target.value)}
                             className="w-full px-2 py-1 border border-gray-200 rounded text-xs">
                             <option value="">Seleccionar cuenta</option>
-                            {puc.filter(p => p.nivel >= 3).map(p => (
+                            {puc.filter(p => (p.nivel === 'cuenta' || p.nivel === 'auxiliar') && p.activa !== false).map(p => (
                               <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre}</option>
                             ))}
                           </select>

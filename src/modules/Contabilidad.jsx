@@ -133,6 +133,7 @@ function Contabilidad() {
   // ── KARDEX ──
   const [formKardex, setFormKardex] = useState({ equipo_id: '', tipo: 'Entrada', cantidad: 1, fecha: new Date().toISOString().slice(0, 10), observacion: '' })
   const [mostrarFormKardex, setMostrarFormKardex] = useState(false)
+  const [equipoKardex, setEquipoKardex] = useState('')
 
   async function guardarKardex() {
     if (!formKardex.equipo_id) { setMensaje('Seleccione un equipo'); return }
@@ -502,52 +503,101 @@ function Contabilidad() {
             </div>
           )}
 
-          {/* Stock actual */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            {equipos.map(e => (
-              <div key={e.id} className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
-                <div className="text-xs font-bold text-gray-700">{e.nombre}</div>
-                <div className={`text-2xl font-bold mt-1 ${(e.stock || 0) > 0 ? 'text-[#27500A]' : 'text-red-600'}`}>
-                  {e.stock || 0}
-                </div>
-                <div className="text-xs text-gray-400">unidades</div>
-              </div>
-            ))}
+          {/* Selector de equipo */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Seleccione un equipo para ver su kardex</label>
+            <select value={equipoKardex} onChange={e => setEquipoKardex(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
+              <option value="">— Todos los equipos (resumen) —</option>
+              {equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+            </select>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100">
-              <span className="text-sm font-bold text-gray-700">Historial de movimientos</span>
+          {!equipoKardex ? (
+            /* Resumen: tarjetas de todos los equipos */
+            <div className="grid grid-cols-3 gap-3">
+              {equipos.map(e => {
+                const movs = kardex.filter(k => k.equipo_id === e.id)
+                return (
+                  <div key={e.id} onClick={() => setEquipoKardex(e.id)}
+                    className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm cursor-pointer hover:border-[#185FA5]">
+                    <div className="text-xs font-bold text-gray-700">{e.nombre}</div>
+                    <div className={`text-2xl font-bold mt-1 ${(e.stock || 0) > 0 ? 'text-[#27500A]' : 'text-red-600'}`}>{e.stock || 0}</div>
+                    <div className="text-xs text-gray-400">unidades · {movs.length} movs</div>
+                  </div>
+                )
+              })}
             </div>
-            {kardex.length === 0 ? (
-              <div className="p-8 text-center text-gray-300 text-sm">No hay movimientos registrados</div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Fecha</th>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Equipo</th>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Tipo</th>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Cantidad</th>
-                    <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Observacion</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {kardex.map(k => (
-                    <tr key={k.id} className="border-t border-gray-50 hover:bg-gray-50">
-                      <td className="px-4 py-2 text-xs text-gray-500">{k.fecha}</td>
-                      <td className="px-4 py-2 text-xs font-semibold">{k.equipos?.nombre || '---'}</td>
-                      <td className="px-4 py-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${tipoColor(k.tipo)}`}>{k.tipo}</span>
-                      </td>
-                      <td className="px-4 py-2 text-xs font-bold">{k.cantidad}</td>
-                      <td className="px-4 py-2 text-xs text-gray-500">{k.observacion || '---'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          ) : (
+            (() => {
+              const eq = equipos.find(e => e.id === equipoKardex)
+              const movs = kardex.filter(k => k.equipo_id === equipoKardex)
+                .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''))
+              const entradas = movs.filter(m => m.tipo === 'Entrada').reduce((s, m) => s + (parseInt(m.cantidad) || 0), 0)
+              const salidas = movs.filter(m => m.tipo === 'Salida').reduce((s, m) => s + (parseInt(m.cantidad) || 0), 0)
+              let saldo = 0
+              return (
+                <div>
+                  <div className="grid grid-cols-4 gap-3 mb-4">
+                    <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+                      <div className="text-xs text-gray-400">Stock actual</div>
+                      <div className={`text-2xl font-bold ${(eq?.stock || 0) > 0 ? 'text-[#27500A]' : 'text-red-600'}`}>{eq?.stock || 0}</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+                      <div className="text-xs text-gray-400">Entradas</div>
+                      <div className="text-2xl font-bold text-green-600">{entradas}</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+                      <div className="text-xs text-gray-400">Salidas</div>
+                      <div className="text-2xl font-bold text-red-600">{salidas}</div>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+                      <div className="text-xs text-gray-400">Movimientos</div>
+                      <div className="text-2xl font-bold text-[#185FA5]">{movs.length}</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <span className="text-sm font-bold text-gray-700">Kardex de {eq?.nombre}</span>
+                    </div>
+                    {movs.length === 0 ? (
+                      <div className="p-8 text-center text-gray-300 text-sm">Sin movimientos registrados</div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Fecha</th>
+                            <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Tipo</th>
+                            <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Entrada</th>
+                            <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Salida</th>
+                            <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Saldo</th>
+                            <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Observación</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {movs.map(k => {
+                            const cant = parseInt(k.cantidad) || 0
+                            saldo += k.tipo === 'Entrada' ? cant : -cant
+                            return (
+                              <tr key={k.id} className="border-t border-gray-50 hover:bg-gray-50">
+                                <td className="px-4 py-2 text-xs text-gray-500">{k.fecha}</td>
+                                <td className="px-4 py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${tipoColor(k.tipo)}`}>{k.tipo}</span></td>
+                                <td className="px-4 py-2 text-xs text-right text-green-700">{k.tipo === 'Entrada' ? cant : ''}</td>
+                                <td className="px-4 py-2 text-xs text-right text-red-700">{k.tipo === 'Salida' ? cant : ''}</td>
+                                <td className="px-4 py-2 text-xs text-right font-bold">{saldo}</td>
+                                <td className="px-4 py-2 text-xs text-gray-500">{k.observacion || '---'}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )
+            })()
+          )}
         </div>
       )}
     </div>

@@ -22,7 +22,7 @@ function Caja() {
     setLoading(true)
     const [{ data: pgs }, { data: cts }, { data: trcs }] = await Promise.all([
       supabase.from('caja').select('*').order('created_at', { ascending: false }),
-      supabase.from('contratos').select('id, cliente_id, total, anticipo, fecha_salida').eq('estado', 'Activo'),
+      supabase.from('contratos').select('id, id_doc, cliente_id, total, anticipo, fecha_salida').eq('estado', 'Activo'),
       supabase.from('terceros').select('id, nombre').order('nombre'),
     ])
     setPagos(pgs || [])
@@ -111,10 +111,10 @@ function Caja() {
               <select value={form.contrato_id} onChange={e => setForm({...form, contrato_id: e.target.value})}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
                 <option value="">— Seleccionar factura —</option>
-                {contratos.map(c => {
+                {contratos.filter(c => saldoPorContrato(c.id) > 0).map(c => {
                   const trc = terceros.find(t => t.id === c.cliente_id)
                   const saldo = saldoPorContrato(c.id)
-                  return <option key={c.id} value={c.id}>{trc?.nombre || c.cliente_id} — Saldo: {fmt(saldo)}</option>
+                  return <option key={c.id} value={c.id}>{c.id_doc || '—'} · {trc?.nombre || c.cliente_id} — Saldo: {fmt(saldo)}</option>
                 })}
               </select>
               {form.contrato_id && (

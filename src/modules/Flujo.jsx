@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { imprimirActaEntrega } from '../utils/actaEntrega'
 
 function Flujo() {
   const [contratos, setContratos] = useState([])
@@ -36,14 +37,18 @@ function Flujo() {
     return (c.total || 0) - (c.anticipo || 0) - abonos
   }
 
+  async function marcarEntregado(contrato) {
+    if (!window.confirm(`¿Confirmar la entrega de ${nombreCliente(contrato.cliente_id)}? Pasará a "En Campo".`)) return
+    const { error } = await supabase.from('contratos')
+      .update({ entregado: true, fecha_entrega: new Date().toISOString().slice(0, 10) })
+      .eq('id', contrato.id)
+    if (error) { alert('Error: ' + error.message); return }
+    await cargarDatos()
+  }
+
   // Filtros por columna
   const cotsPendientes = cotizaciones.filter(c =>
     c.estado !== 'Aprobada' && c.estado !== 'Rechazada' &&
-    (filtroCliente ? c.cliente_id === filtroCliente : true)
-  )
-
-  const porEntregar = contratos.filter(c =>
-    !c.fecha_real_salida &&
     (filtroCliente ? c.cliente_id === filtroCliente : true)
   )
 
@@ -52,9 +57,23 @@ function Flujo() {
     (filtroCliente ? c.cliente_id === filtroCliente : true)
   )
 
-  const enCampo = contratos.filter(c =>
-    filtroCliente ? c.cliente_id === filtroCliente : true
+  const porEntregar = contratos.filter(c =>
+    !c.entregado &&
+    (filtroCliente ? c.cliente_id === filtroCliente : true)
   )
+
+  const enCampo = contratos.filter(c =>
+    c.entregado &&
+    (filtroCliente ? c.cliente_id === filtroCliente : true)
+  )
+
+  const proximasVencer = enCampo.filter(c => {
+    if (!c.fecha_est_dev) return false
+    const hoy = new Date(); hoy.setHours(0,0,0,0)
+    const dev = new Date(c.fecha_est_dev)
+    const dias = Math.ceil((dev - hoy) / (1000 * 60 * 60 * 24))
+    return dias <= 2
+  })
 
   const alertaColor = (c) => {
     if (!c.fecha_est_dev) return 'border-gray-200'
@@ -102,7 +121,7 @@ function Flujo() {
       </div>
 
       {/* Tablero Kanban */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
 
         {/* COL 1: COTIZACIONES */}
         <div className="bg-gray-50 rounded-xl overflow-hidden">
@@ -129,26 +148,38 @@ function Flujo() {
           </div>
         </div>
 
-        {/* COL 2: POR ENTREGAR */}
+        {/* COL: POR ENTREGAR */}
         <div className="bg-gray-50 rounded-xl overflow-hidden">
-          <div className="p-3 bg-gradient-to-r from-[#185FA5] to-[#0C447C]">
+          <div className="p-3 bg-gradient-to-r from-[#1E3A8A] to-[#185FA5]">
             <div className="flex items-center justify-between">
-              <span className="text-white text-xs font-bold">🚚 Por Entregar</span>
+              <span className="text-white text-xs font-bold">📦 Por Entregar</span>
               <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{porEntregar.length}</span>
             </div>
-            <p className="text-blue-200 text-xs mt-0.5">Facturas sin confirmar salida</p>
+            <p className="text-blue-200 text-xs mt-0.5">Facturado — pendiente de entrega</p>
           </div>
           <div className="p-2 flex flex-col gap-2">
             {porEntregar.length === 0 ? (
-              <div className="p-4 text-center text-gray-300 text-xs">Sin entregas pendientes</div>
-            ) : porEntregar.map(c => (
-              <div key={c.id} className={`bg-white rounded-lg p-3 border-l-4 ${alertaColor(c)} border border-gray-100 shadow-sm`}>
-                <div className="font-semibold text-xs text-gray-800">{nombreCliente(c.cliente_id)}</div>
-                <div className="text-xs text-gray-400 mt-0.5">📍 {c.ubicacion || '—'}</div>
-                <div className="text-xs text-gray-400">🗓 Salida: {fmtFecha(c.fecha_salida)}</div>
-                <div className="text-xs font-bold text-[#185FA5] mt-1">{fmt(c.total)}</div>
-              </div>
-            ))}
+              <div className="p-4 text-center text-gray-300 text-xs">Nada por entregar</div>
+            ) : porEntregar.map(c => {
+              const items = c.items || []
+              return (
+                <div key={c.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-xs text-gray-800">{nombreCliente(c.cliente_id)}</div>
+                    <span className="text-xs font-bold text-[#185FA5]">{c.id_doc || '—'}</span>
+                  </div>
+                  {items.length > 0 && (
+                    <div className="text-xs text-gray-400 mt-1">🔧 {items.map(i => `${i.nombre || i.equipo_id} x${i.cantidad}`).join(', ')}</div>
+                  )}
+                  <div className="text-xs text-gray-400">📍 {c.ubicacion || '—'}</div>
+                  <div className="text-xs text-gray-400">📅 Salida: {fmtFecha(c.fecha_salida)}</div>
+                  <button onClick={() => marcarEntregado(c)}
+                    className="mt-1 w-full px-2 py-1.5 bg-[#27500A] text-white text-xs font-semibold rounded-lg hover:opacity-90">
+                    ✓ Confirmar entrega
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -168,7 +199,10 @@ function Flujo() {
               const saldo = saldoContrato(c)
               return (
                 <div key={c.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
-                  <div className="font-semibold text-xs text-gray-800">{nombreCliente(c.cliente_id)}</div>
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-xs text-gray-800">{nombreCliente(c.cliente_id)}</div>
+                    <span className="text-xs font-bold text-[#185FA5]">{c.id_doc || '—'}</span>
+                  </div>
                   <div className="mt-2 p-2 bg-red-50 rounded-lg">
                     <div className="text-xs text-gray-500">Saldo pendiente</div>
                     <div className="text-base font-bold text-red-600">{fmt(saldo)}</div>
@@ -212,6 +246,52 @@ function Flujo() {
                   <div className={`text-xs font-bold mt-1 ${saldo > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {saldo > 0 ? `💰 ${fmt(saldo)}` : '✓ Pagado'}
                   </div>
+                  <button onClick={() => imprimirActaEntrega(c, terceros.find(t => t.id === c.cliente_id), items)}
+                    className="mt-2 w-full px-2 py-1.5 bg-[#185FA5] text-white text-xs font-semibold rounded-lg hover:opacity-90">
+                    📄 Acta de entrega
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* COL 5: DEVOLUCIONES */}
+        <div className="bg-gray-50 rounded-xl overflow-hidden">
+          <div className="p-3 bg-gradient-to-r from-[#7C2D12] to-[#DC2626]">
+            <div className="flex items-center justify-between">
+              <span className="text-white text-xs font-bold">⚠️ Devoluciones</span>
+              <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{proximasVencer.length}</span>
+            </div>
+            <p className="text-red-200 text-xs mt-0.5">Próximas a vencer (2 días)</p>
+          </div>
+          <div className="p-2 flex flex-col gap-2">
+            {proximasVencer.length === 0 ? (
+              <div className="p-4 text-center text-gray-300 text-xs">Nada próximo a vencer</div>
+            ) : proximasVencer.map(c => {
+              const alerta = alertaTexto(c)
+              const dir = c.ubicacion || ''
+              return (
+                <div key={c.id} className="bg-white rounded-lg p-3 border-l-4 border-red-400 border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-xs text-gray-800">{nombreCliente(c.cliente_id)}</div>
+                    <span className="text-xs font-bold text-[#185FA5]">{c.id_doc || '—'}</span>
+                  </div>
+                  {alerta && <div className="mt-1"><span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${alerta.color}`}>{alerta.texto}</span></div>}
+                  <div className="text-xs text-gray-400 mt-1">📅 Dev: {fmtFecha(c.fecha_est_dev)}</div>
+                  <div className="text-xs text-gray-400">📍 {dir || '—'}</div>
+                  {dir && (
+                    <div className="flex gap-1 mt-1">
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dir)}`} target="_blank" rel="noreferrer"
+                        className="flex-1 text-center px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded hover:bg-blue-100">🗺️ Maps</a>
+                      <a href={`https://waze.com/ul?q=${encodeURIComponent(dir)}`} target="_blank" rel="noreferrer"
+                        className="flex-1 text-center px-2 py-1 bg-cyan-50 text-cyan-700 text-xs font-semibold rounded hover:bg-cyan-100">🚗 Waze</a>
+                    </div>
+                  )}
+                  <button onClick={() => alert('Para registrar la devolución, vaya al módulo Facturas → Equipos de esta factura (' + (c.id_doc || '') + ')')}
+                    className="mt-2 w-full px-2 py-1.5 bg-[#7C2D12] text-white text-xs font-semibold rounded-lg hover:opacity-90">
+                    ↩️ Registrar devolución
+                  </button>
                 </div>
               )
             })}

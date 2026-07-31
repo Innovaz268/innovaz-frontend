@@ -173,6 +173,14 @@ function Flujo() {
                   )}
                   <div className="text-xs text-gray-400">📍 {c.ubicacion || '—'}</div>
                   <div className="text-xs text-gray-400">📅 Salida: {fmtFecha(c.fecha_salida)}</div>
+                  {c.ubicacion && (
+                    <div className="flex gap-1 mt-1">
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.ubicacion)}`} target="_blank" rel="noreferrer"
+                        className="flex-1 text-center px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded hover:bg-blue-100">🗺️ Maps</a>
+                      <a href={`https://waze.com/ul?q=${encodeURIComponent(c.ubicacion)}`} target="_blank" rel="noreferrer"
+                        className="flex-1 text-center px-2 py-1 bg-cyan-50 text-cyan-700 text-xs font-semibold rounded hover:bg-cyan-100">🚗 Waze</a>
+                    </div>
+                  )}
                   <button onClick={() => marcarEntregado(c)}
                     className="mt-1 w-full px-2 py-1.5 bg-[#27500A] text-white text-xs font-semibold rounded-lg hover:opacity-90">
                     ✓ Confirmar entrega

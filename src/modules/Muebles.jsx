@@ -10,6 +10,7 @@ function Muebles() {
   const [terceros, setTerceros] = useState([])
   const [costos, setCostos] = useState([])
   const [facturas, setFacturas] = useState([])
+  const [subiendoFotos, setSubiendoFotos] = useState(null)
   const [ordenCostos, setOrdenCostos] = useState(null)
   const [formCosto, setFormCosto] = useState({ fecha: new Date().toISOString().slice(0,10), tipo: 'Material', descripcion: '', proveedor_id: '', valor: 0, metodo_pago: 'Efectivo' })
   const [loading, setLoading] = useState(true)
@@ -155,7 +156,31 @@ async function cargarDatos() {
   }
 
   async function cambiarEstadoOrden(id, estado) {
-    await supabase.from('muebles_ordenes').update({ estado }).eq('id', id)
+    const datos = { estado }
+    if (estado === 'Entregado') {
+      datos.fecha_entrega = new Date().toISOString().slice(0, 10)
+    }
+    await supabase.from('muebles_ordenes').update(datos).eq('id', id)
+    if (estado === 'Entregado') {
+      setSubiendoFotos(id)
+    }
+    await cargarDatos()
+  }
+
+  async function subirFotosEntrega(ordenId, files) {
+    if (!files || files.length === 0) return
+    setMensaje('Subiendo fotos...')
+    const orden = ordenes.find(o => o.id === ordenId)
+    const urls = [...(orden?.fotos_entrega || [])]
+    for (const file of files) {
+      const nombre = `entregas/${ordenId}_${Date.now()}_${file.name.replace(/\s/g, '_')}`
+      const { error } = await supabase.storage.from('publico').upload(nombre, file, { upsert: true })
+      if (error) { setMensaje('Error subiendo foto: ' + error.message); return }
+      const { data } = supabase.storage.from('publico').getPublicUrl(nombre)
+      urls.push(data.publicUrl)
+    }
+    await supabase.from('muebles_ordenes').update({ fotos_entrega: urls }).eq('id', ordenId)
+    setMensaje('✓ Fotos de entrega guardadas')
     await cargarDatos()
   }
 
@@ -508,6 +533,25 @@ async function cargarDatos() {
                   )
                 })}
               </div>
+
+              {subiendoFotos === o.id && (
+                <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-xs font-semibold text-green-700 mb-2">📸 Fotos de entrega</p>
+                  <input type="file" accept="image/*" multiple capture="environment" onChange={e => subirFotosEntrega(o.id, e.target.files)}
+                    className="text-xs" />
+                  <button onClick={() => setSubiendoFotos(null)} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Cerrar</button>
+                </div>
+              )}
+
+              {(o.fotos_entrega && o.fotos_entrega.length > 0) && (
+                <div className="mb-3 flex gap-2 flex-wrap">
+                  {o.fotos_entrega.map((url, idx) => (
+                    <a key={idx} href={url} target="_blank" rel="noreferrer">
+                      <img src={url} alt={`Entrega ${idx+1}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
+                    </a>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-3 text-center bg-gray-50 rounded-lg p-2">
                 <div>
                   <div className="text-xs text-gray-400">Inicio</div>

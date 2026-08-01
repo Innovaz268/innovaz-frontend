@@ -8,22 +8,29 @@ function Flujo() {
   const [terceros, setTerceros] = useState([])
   const [pagos, setPagos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [negocio, setNegocio] = useState('')
   const [filtroCliente, setFiltroCliente] = useState('')
+  const [ordenesMuebles, setOrdenesMuebles] = useState([])
+  const [cotsMuebles, setCotsMuebles] = useState([])
 
   useEffect(() => { cargarDatos() }, [])
 
   async function cargarDatos() {
     setLoading(true)
-    const [{ data: cts }, { data: cots }, { data: trcs }, { data: pgs }] = await Promise.all([
+    const [{ data: cts }, { data: cots }, { data: trcs }, { data: pgs }, { data: oms }, { data: cms }] = await Promise.all([
       supabase.from('contratos').select('*').eq('estado', 'Activo'),
       supabase.from('cotizaciones').select('*').order('created_at', { ascending: false }),
       supabase.from('terceros').select('id, nombre').order('nombre'),
       supabase.from('caja').select('*'),
+      supabase.from('muebles_ordenes').select('*').order('created_at', { ascending: false }),
+      supabase.from('muebles_cotizaciones').select('*').order('created_at', { ascending: false }),
     ])
     setContratos(cts || [])
     setCotizaciones(cots || [])
     setTerceros(trcs || [])
     setPagos(pgs || [])
+    setOrdenesMuebles(oms || [])
+    setCotsMuebles(cms || [])
     setLoading(false)
   }
 
@@ -36,6 +43,16 @@ function Flujo() {
     const abonos = pagos.filter(p => p.contrato_id === c.id).reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
     return (c.total || 0) - (c.anticipo || 0) - abonos
   }
+  // FLUJO DE MUEBLES
+  const cotsMueblesPend = cotsMuebles.filter(c => c.estado === 'Borrador' || c.estado === 'Pendiente')
+  const mueblesEnProceso = ordenesMuebles.filter(o => o.estado === 'En diseno' || o.estado === 'En produccion')
+  const mueblesTerminados = ordenesMuebles.filter(o => o.estado === 'Terminado')
+  const mueblesEntregados = ordenesMuebles.filter(o => o.estado === 'Entregado')
+  const saldoMueble = (o) => {
+    const abonos = pagos.filter(p => p.contrato_id === o.id).reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
+    return (o.total || 0) - (o.anticipo || 0) - abonos
+  }
+  const mueblesPorCobrar = ordenesMuebles.filter(o => saldoMueble(o) > 0)
 
   async function marcarEntregado(contrato) {
     if (!window.confirm(`¿Confirmar la entrega de ${nombreCliente(contrato.cliente_id)}? Pasará a "En Campo".`)) return
@@ -75,6 +92,10 @@ function Flujo() {
     return dias <= 2
   })
 
+  // Conteos para la pantalla de selección de negocio
+  const totalAlquilerActivas = contratos.filter(c => c.estado === 'Activo').length
+  const totalMueblesProceso = cotizaciones.filter(c => c.estado !== 'Entregado' && c.estado !== 'Anulado').length
+
   const alertaColor = (c) => {
     if (!c.fecha_est_dev) return 'border-gray-200'
     const hoy = new Date()
@@ -105,22 +126,51 @@ function Flujo() {
       <div className="flex items-center justify-between mb-4 mt-2 flex-wrap gap-2">
         <div>
           <h2 className="text-xl font-bold text-[#185FA5]">⚙️ Flujo Logístico</h2>
-          <p className="text-xs text-gray-400">Cotización → Entrega → Cobro → Devolución</p>
+          <p className="text-xs text-gray-400">{negocio === 'alquiler' ? 'Alquiler: Cotización → Entrega → Cobro → Devolución' : negocio === 'muebles' ? 'Muebles: Cotización → Producción → Entrega → Cobro' : 'Seleccione una línea de negocio'}</p>
         </div>
         <div className="flex gap-2 items-center">
-          <select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#185FA5] bg-white">
-            <option value="">— Todos los clientes —</option>
-            {terceros.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-          </select>
-          <button onClick={cargarDatos}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">
-            🔄 Actualizar
-          </button>
+          {negocio && (
+            <>
+              <button onClick={() => setNegocio('')}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">
+                ← Volver
+              </button>
+              <select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-[#185FA5] bg-white">
+                <option value="">— Todos los clientes —</option>
+                {terceros.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+              </select>
+              <button onClick={cargarDatos}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">
+                🔄 Actualizar
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Tablero Kanban */}
+      {/* Pantalla de selección de negocio */}
+      {!negocio && (
+        <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto mt-8">
+          <button onClick={() => setNegocio('alquiler')}
+            className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-8 hover:border-[#185FA5] transition text-center">
+            <div className="text-5xl mb-3">🔧</div>
+            <div className="text-lg font-bold text-gray-800">Alquiler</div>
+            <div className="text-4xl font-bold text-[#185FA5] mt-2">{contratos.filter(c => c.estado === 'Activo').length}</div>
+            <div className="text-xs text-gray-400">facturas activas</div>
+          </button>
+          <button onClick={() => setNegocio('muebles')}
+            className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-8 hover:border-[#5B21B6] transition text-center">
+            <div className="text-5xl mb-3">🪵</div>
+            <div className="text-lg font-bold text-gray-800">Muebles</div>
+            <div className="text-4xl font-bold text-[#5B21B6] mt-2">{ordenesMuebles.filter(o => o.estado !== 'Entregado').length}</div>
+            <div className="text-xs text-gray-400">órdenes en proceso</div>
+          </button>
+        </div>
+      )}
+
+      {/* Tablero Kanban - ALQUILER */}
+      {negocio === 'alquiler' && (
       <div className="grid grid-cols-5 gap-3">
 
         {/* COL 1: COTIZACIONES */}
@@ -307,6 +357,144 @@ function Flujo() {
         </div>
 
       </div>
+      )}
+
+      {/* Tablero Kanban - MUEBLES */}
+      {negocio === 'muebles' && (
+      <div className="grid grid-cols-5 gap-3">
+
+        {/* COL 1: COTIZACIONES MUEBLES */}
+        <div className="bg-gray-50 rounded-xl overflow-hidden">
+          <div className="p-3 bg-gradient-to-r from-[#5B21B6] to-[#7C3AED]">
+            <div className="flex items-center justify-between">
+              <span className="text-white text-xs font-bold">📝 Cotizaciones</span>
+              <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{cotsMueblesPend.length}</span>
+            </div>
+            <p className="text-purple-200 text-xs mt-0.5">Pendientes de aprobar</p>
+          </div>
+          <div className="p-2 flex flex-col gap-2">
+            {cotsMueblesPend.length === 0 ? (
+              <div className="p-4 text-center text-gray-300 text-xs">Sin cotizaciones</div>
+            ) : cotsMueblesPend.map(c => (
+              <div key={c.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-xs text-gray-800">{nombreCliente(c.cliente_id)}</div>
+                  <span className="text-xs font-bold text-[#5B21B6]">{c.id_doc || '—'}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">{c.descripcion || '—'}</div>
+                <div className="text-xs font-bold text-[#5B21B6] mt-1">{fmt(c.total)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* COL 2: EN PROCESO */}
+        <div className="bg-gray-50 rounded-xl overflow-hidden">
+          <div className="p-3 bg-gradient-to-r from-[#1E3A8A] to-[#185FA5]">
+            <div className="flex items-center justify-between">
+              <span className="text-white text-xs font-bold">🔨 En Proceso</span>
+              <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{mueblesEnProceso.length}</span>
+            </div>
+            <p className="text-blue-200 text-xs mt-0.5">Diseño y producción</p>
+          </div>
+          <div className="p-2 flex flex-col gap-2">
+            {mueblesEnProceso.length === 0 ? (
+              <div className="p-4 text-center text-gray-300 text-xs">Nada en proceso</div>
+            ) : mueblesEnProceso.map(o => (
+              <div key={o.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
+                  <span className="text-xs font-bold text-[#185FA5]">{o.id_doc || '—'}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
+                <div className="text-xs mt-1"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-semibold">{o.estado}</span></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* COL 3: TERMINADOS */}
+        <div className="bg-gray-50 rounded-xl overflow-hidden">
+          <div className="p-3 bg-gradient-to-r from-[#065F46] to-[#059669]">
+            <div className="flex items-center justify-between">
+              <span className="text-white text-xs font-bold">✅ Terminados</span>
+              <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{mueblesTerminados.length}</span>
+            </div>
+            <p className="text-green-200 text-xs mt-0.5">Listos para entregar</p>
+          </div>
+          <div className="p-2 flex flex-col gap-2">
+            {mueblesTerminados.length === 0 ? (
+              <div className="p-4 text-center text-gray-300 text-xs">Nada terminado</div>
+            ) : mueblesTerminados.map(o => (
+              <div key={o.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
+                  <span className="text-xs font-bold text-green-700">{o.id_doc || '—'}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
+                <div className="text-xs font-bold text-green-700 mt-1">{fmt(o.total)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* COL 4: ENTREGADOS */}
+        <div className="bg-gray-50 rounded-xl overflow-hidden">
+          <div className="p-3 bg-gradient-to-r from-[#7C2D12] to-[#EA580C]">
+            <div className="flex items-center justify-between">
+              <span className="text-white text-xs font-bold">📦 Entregados</span>
+              <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{mueblesEntregados.length}</span>
+            </div>
+            <p className="text-orange-200 text-xs mt-0.5">Entregados al cliente</p>
+          </div>
+          <div className="p-2 flex flex-col gap-2">
+            {mueblesEntregados.length === 0 ? (
+              <div className="p-4 text-center text-gray-300 text-xs">Nada entregado</div>
+            ) : mueblesEntregados.map(o => (
+              <div key={o.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
+                  <span className="text-xs font-bold text-[#EA580C]">{o.id_doc || '—'}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* COL 5: POR COBRAR */}
+        <div className="bg-gray-50 rounded-xl overflow-hidden">
+          <div className="p-3 bg-gradient-to-r from-[#7C2D12] to-[#DC2626]">
+            <div className="flex items-center justify-between">
+              <span className="text-white text-xs font-bold">💰 Por Cobrar</span>
+              <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{mueblesPorCobrar.length}</span>
+            </div>
+            <p className="text-red-200 text-xs mt-0.5">Con saldo pendiente</p>
+          </div>
+          <div className="p-2 flex flex-col gap-2">
+            {mueblesPorCobrar.length === 0 ? (
+              <div className="p-4 text-center text-gray-300 text-xs">Sin cobros pendientes</div>
+            ) : mueblesPorCobrar.map(o => {
+              const saldo = saldoMueble(o)
+              return (
+                <div key={o.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
+                    <span className="text-xs font-bold text-[#DC2626]">{o.id_doc || '—'}</span>
+                  </div>
+                  <div className="mt-2 p-2 bg-red-50 rounded-lg">
+                    <div className="text-xs text-gray-500">Saldo pendiente</div>
+                    <div className="text-base font-bold text-red-600">{fmt(saldo)}</div>
+                    <div className="text-xs text-gray-400">de {fmt(o.total)}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+      </div>
+      )}
     </div>
   )
 }

@@ -9,6 +9,7 @@ function Muebles() {
   const [ordenes, setOrdenes] = useState([])
   const [terceros, setTerceros] = useState([])
   const [costos, setCostos] = useState([])
+  const [facturas, setFacturas] = useState([])
   const [ordenCostos, setOrdenCostos] = useState(null)
   const [formCosto, setFormCosto] = useState({ fecha: new Date().toISOString().slice(0,10), tipo: 'Material', descripcion: '', proveedor_id: '', valor: 0, metodo_pago: 'Efectivo' })
   const [loading, setLoading] = useState(true)
@@ -21,39 +22,40 @@ function Muebles() {
     vigencia: '', descripcion: '', items: [], valor: 0, descuento: 0, anticipo: 0, observaciones: ''
   })
 
+  const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
+  const nombreCliente = id => terceros.find(t => t.id === id)?.nombre || '---'
+
   useEffect(() => { cargarDatos() }, [])
 
 async function cargarDatos() {
     setLoading(true)
-    const [{ data: cots }, { data: ords }, { data: trcs }, { data: csts }] = await Promise.all([
+    const [{ data: cots }, { data: ords }, { data: trcs }, { data: csts }, { data: facs }] = await Promise.all([
       supabase.from('muebles_cotizaciones').select('*').order('created_at', { ascending: false }),
       supabase.from('muebles_ordenes').select('*').order('created_at', { ascending: false }),
       supabase.from('terceros').select('id, nombre').order('nombre'),
       supabase.from('muebles_costos').select('*').order('fecha', { ascending: false }),
+      supabase.from('muebles_facturas').select('*').order('created_at', { ascending: false }),
     ])
     setCotizaciones(cots || [])
     setOrdenes(ords || [])
     setTerceros(trcs || [])
     setCostos(csts || [])
+    setFacturas(facs || [])
     setLoading(false)
   }
-
-  const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
-  const nombreCliente = id => terceros.find(t => t.id === id)?.nombre || '---'
 
   function agregarItem() {
     setForm({ ...form, items: [...form.items, { descripcion: '', unidad: 'und', cantidad: 1, valor_unit: 0, subtotal: 0 }] })
   }
 
+  function eliminarItem(i) {
+    setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) })
+  }
   function actualizarItem(i, campo, valor) {
     const items = [...form.items]
     items[i] = { ...items[i], [campo]: valor }
     items[i].subtotal = (parseFloat(items[i].cantidad) || 0) * (parseFloat(items[i].valor_unit) || 0)
     setForm({ ...form, items })
-  }
-
-  function eliminarItem(i) {
-    setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) })
   }
 
   const subtotalCot = form.items.reduce((s, i) => s + (i.subtotal || 0), 0)
@@ -102,19 +104,52 @@ async function cargarDatos() {
     await cargarDatos()
   }
 
-  async function convertirAOrden(c) {
-    if (!window.confirm('Convertir a Orden de Produccion?')) return
+  async function aceptarCotizacion(c) {
+    if (!window.confirm('¿Aceptar la cotización y generar la Factura de Muebles?')) return
+    const codigoFM = await siguienteConsecutivo('FM')
+    const { data: factura, error } = await supabase.from('muebles_facturas').insert([{
+      id_doc: codigoFM,
+      cotizacion_id: c.id,
+      cliente_id: c.cliente_id,
+      descripcion: c.descripcion,
+      items: c.items,
+      total: c.total || 0,
+      anticipo: c.anticipo || 0,
+      estado: 'Activa',
+      fecha: new Date().toISOString().slice(0,10),
+      observaciones: c.observaciones
+    }]).select().single()
+    if (error) { setMensaje('Error: ' + error.message); return }
+
+    // Asiento de venta + abono (con el número de factura FM)
+    const resultAsiento = await asientoMueble({ ...c, id_doc: codigoFM })
+    console.log('asiento factura muebles:', resultAsiento)
+
+    // Marcar la cotización como Facturada
+    await supabase.from('muebles_cotizaciones').update({ estado: 'Facturada' }).eq('id', c.id)
+
+    setMensaje('Factura de muebles generada: ' + codigoFM)
+    setVista('facturas')
+    await cargarDatos()
+  }
+  async function emitirOrden(f) {
+    if (!window.confirm('¿Emitir la Orden de Producción para esta factura?')) return
+    const codigoOM = await siguienteConsecutivo('OM')
     const { error } = await supabase.from('muebles_ordenes').insert([{
-      cotizacion_id: c.id, cliente_id: c.cliente_id, estado: 'En diseno',
+      id_doc: codigoOM,
+      factura_id: f.id,
+      cotizacion_id: f.cotizacion_id,
+      cliente_id: f.cliente_id,
+      estado: 'En diseno',
       fecha_inicio: new Date().toISOString().slice(0,10),
-      descripcion: c.descripcion, items: c.items,
-      total: c.total, anticipo: c.anticipo, observaciones: c.observaciones
+      descripcion: f.descripcion,
+      items: f.items,
+      total: f.total,
+      anticipo: f.anticipo,
+      observaciones: f.observaciones
     }])
     if (error) { setMensaje('Error: ' + error.message); return }
-    await supabase.from('muebles_cotizaciones').update({ estado: 'Aprobada' }).eq('id', c.id)
-    const resultAsiento = await asientoMueble({ ...c })
-    console.log('asiento mueble:', resultAsiento)
-    setMensaje('Orden de produccion creada')
+    setMensaje('Orden de producción emitida: ' + codigoOM)
     setVista('ordenes')
     await cargarDatos()
   }
@@ -197,6 +232,10 @@ async function cargarDatos() {
           <button onClick={() => { setVista('cotizaciones'); setMostrarForm(false) }}
             className={`px-3 py-2 text-xs font-bold rounded-lg ${vista === 'cotizaciones' ? 'bg-[#185FA5] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>
             Cotizaciones
+          </button>
+          <button onClick={() => { setVista('facturas'); setMostrarForm(false) }}
+            className={`px-3 py-2 text-xs font-bold rounded-lg ${vista === 'facturas' ? 'bg-[#27500A] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>
+            Facturas
           </button>
           <button onClick={() => { setVista('ordenes'); setMostrarForm(false) }}
             className={`px-3 py-2 text-xs font-bold rounded-lg ${vista === 'ordenes' ? 'bg-[#5B21B6] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>
@@ -378,9 +417,9 @@ async function cargarDatos() {
                     <td className="px-4 py-2 text-xs font-semibold text-[#185FA5]">{fmt(c.total)}</td>
                     <td className="px-4 py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${estadoBadgeCot(c.estado)}`}>{c.estado}</span></td>
                     <td className="px-4 py-2 text-right flex gap-2 justify-end">
-                      {c.estado !== 'Aprobada' && (
-                        <button onClick={() => convertirAOrden(c)} title="Convertir a orden"
-                          className="text-xs text-purple-400 hover:text-purple-600">Orden</button>
+                      {c.estado !== 'Facturada' && c.estado !== 'Aprobada' && (
+                        <button onClick={() => aceptarCotizacion(c)} title="Aceptar y facturar"
+                          className="text-xs text-green-600 hover:text-green-800 font-semibold">✓ Facturar</button>
                       )}
                       <button onClick={() => abrirEditarCot(c)} className="text-xs text-blue-400 hover:text-blue-600">Editar</button>
                       <button onClick={() => eliminarCotizacion(c.id)} className="text-xs text-red-400 hover:text-red-600">x</button>
@@ -393,6 +432,52 @@ async function cargarDatos() {
         </div>
       )}
 
+{vista === 'facturas' && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {facturas.length === 0 ? (
+            <div className="p-8 text-center text-gray-300 text-sm">No hay facturas de muebles</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Factura</th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Cliente</th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Descripción</th>
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Total</th>
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Anticipo</th>
+                  <th className="px-4 py-2 text-right text-xs text-gray-500 font-semibold">Saldo</th>
+                  <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Estado</th>
+                  <th className="px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {facturas.map(f => {
+                  const tieneOrden = ordenes.some(o => o.factura_id === f.id)
+                  const saldo = (f.total || 0) - (f.anticipo || 0)
+                  return (
+                    <tr key={f.id} className="border-t border-gray-50 hover:bg-gray-50">
+                      <td className="px-4 py-2 font-semibold text-xs text-[#27500A]">{f.id_doc || '—'}</td>
+                      <td className="px-4 py-2 text-xs">{nombreCliente(f.cliente_id)}</td>
+                      <td className="px-4 py-2 text-xs text-gray-500">{f.descripcion || '—'}</td>
+                      <td className="px-4 py-2 text-xs text-right font-semibold">{fmt(f.total)}</td>
+                      <td className="px-4 py-2 text-xs text-right text-gray-500">{fmt(f.anticipo)}</td>
+                      <td className="px-4 py-2 text-xs text-right font-semibold text-red-600">{fmt(saldo)}</td>
+                      <td className="px-4 py-2"><span className="text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-semibold">{f.estado}</span></td>
+                      <td className="px-4 py-2 text-right">
+                        {tieneOrden ? (
+                          <span className="text-xs text-gray-400">Orden emitida</span>
+                        ) : (
+                          <button onClick={() => emitirOrden(f)} className="text-xs text-[#5B21B6] hover:underline font-semibold">Emitir orden</button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
       {vista === 'ordenes' && (
         <div className="space-y-3">
           {loading ? (

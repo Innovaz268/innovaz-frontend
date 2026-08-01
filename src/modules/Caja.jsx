@@ -6,6 +6,7 @@ import { asientoPago } from '../utils/asientosAuto'
 function Caja() {
   const [pagos, setPagos] = useState([])
   const [contratos, setContratos] = useState([])
+  const [facturasMuebles, setFacturasMuebles] = useState([])
   const [terceros, setTerceros] = useState([])
   const [loading, setLoading] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
@@ -20,13 +21,15 @@ function Caja() {
 
   async function cargarDatos() {
     setLoading(true)
-    const [{ data: pgs }, { data: cts }, { data: trcs }] = await Promise.all([
+    const [{ data: pgs }, { data: cts }, { data: mfs }, { data: trcs }] = await Promise.all([
       supabase.from('caja').select('*').order('created_at', { ascending: false }),
       supabase.from('contratos').select('id, id_doc, cliente_id, total, anticipo, fecha_salida').eq('estado', 'Activo'),
+      supabase.from('muebles_facturas').select('*').eq('estado', 'Activa'),
       supabase.from('terceros').select('id, nombre').order('nombre'),
     ])
     setPagos(pgs || [])
     setContratos(cts || [])
+    setFacturasMuebles(mfs || [])
     setTerceros(trcs || [])
     setLoading(false)
   }
@@ -37,11 +40,30 @@ function Caja() {
     setGuardando(true)
     setMensaje('')
     const codigo = await siguienteConsecutivo('RC')
-    const datosRC = { ...form, id_doc: codigo }
+
+    // Interpretar el prefijo: 'c:' = alquiler (contratos), 'mf:' = muebles
+    const esMueble = form.contrato_id.startsWith('mf:')
+    const idReal = form.contrato_id.slice(form.contrato_id.indexOf(':') + 1)
+
+    let clienteId = ''
+    const datosRC = {
+      fecha: form.fecha,
+      monto: form.monto,
+      metodo: form.metodo,
+      concepto: form.concepto,
+      id_doc: codigo,
+    }
+    if (esMueble) {
+      datosRC.muebles_factura_id = idReal
+      clienteId = facturasMuebles.find(f => f.id === idReal)?.cliente_id || ''
+    } else {
+      datosRC.contrato_id = idReal
+      clienteId = contratos.find(c => c.id === idReal)?.cliente_id || ''
+    }
+
     const { error } = await supabase.from('caja').insert([datosRC])
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
-    const contrato = contratos.find(c => c.id === form.contrato_id)
-    await asientoPago({ ...datosRC }, contrato?.cliente_id || '')
+    await asientoPago({ ...datosRC }, clienteId)
     setMensaje('✓ Pago registrado correctamente')
     setForm({ contrato_id: '', fecha: new Date().toISOString().slice(0,10), monto: '', metodo: 'Efectivo', concepto: 'Abono factura' })
     setMostrarForm(false)
@@ -63,6 +85,13 @@ function Caja() {
     if (!contrato) return 0
     const abonos = pagos.filter(p => p.contrato_id === contratoId).reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
     return (contrato.total || 0) - (contrato.anticipo || 0) - abonos
+  }
+  // Saldo de una factura de muebles
+  const saldoFacturaMueble = (facturaId) => {
+    const f = facturasMuebles.find(x => x.id === facturaId)
+    if (!f) return 0
+    const abonos = pagos.filter(p => p.muebles_factura_id === facturaId).reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
+    return (f.total || 0) - (f.anticipo || 0) - abonos
   }
 
   const totalIngresos = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
@@ -111,15 +140,24 @@ function Caja() {
               <select value={form.contrato_id} onChange={e => setForm({...form, contrato_id: e.target.value})}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
                 <option value="">— Seleccionar factura —</option>
-                {contratos.filter(c => saldoPorContrato(c.id) > 0).map(c => {
-                  const trc = terceros.find(t => t.id === c.cliente_id)
-                  const saldo = saldoPorContrato(c.id)
-                  return <option key={c.id} value={c.id}>{c.id_doc || '—'} · {trc?.nombre || c.cliente_id} — Saldo: {fmt(saldo)}</option>
-                })}
+                <optgroup label="🔧 Alquiler">
+                  {contratos.filter(c => saldoPorContrato(c.id) > 0).map(c => {
+                    const trc = terceros.find(t => t.id === c.cliente_id)
+                    const saldo = saldoPorContrato(c.id)
+                    return <option key={c.id} value={'c:' + c.id}>{c.id_doc || '—'} · {trc?.nombre || c.cliente_id} — Saldo: {fmt(saldo)}</option>
+                  })}
+                </optgroup>
+                <optgroup label="🪵 Muebles">
+                  {facturasMuebles.filter(f => saldoFacturaMueble(f.id) > 0).map(f => {
+                    const trc = terceros.find(t => t.id === f.cliente_id)
+                    const saldo = saldoFacturaMueble(f.id)
+                    return <option key={f.id} value={'mf:' + f.id}>{f.id_doc || '—'} · {trc?.nombre || f.cliente_id} — Saldo: {fmt(saldo)}</option>
+                  })}
+                </optgroup>
               </select>
               {form.contrato_id && (
                 <div className="mt-1 text-xs text-gray-500">
-                  Saldo pendiente: <span className="font-bold text-red-600">{fmt(saldoPorContrato(form.contrato_id))}</span>
+                  Saldo pendiente: <span className="font-bold text-red-600">{fmt(form.contrato_id.startsWith('mf:') ? saldoFacturaMueble(form.contrato_id.slice(3)) : saldoPorContrato(form.contrato_id.slice(2)))}</span>
                 </div>
               )}
             </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { imprimirActaEntrega } from '../utils/actaEntrega'
+import { imprimirActaMuebles } from '../utils/actaMuebles'
 
 function Flujo() {
   const [contratos, setContratos] = useState([])
@@ -12,18 +13,21 @@ function Flujo() {
   const [filtroCliente, setFiltroCliente] = useState('')
   const [ordenesMuebles, setOrdenesMuebles] = useState([])
   const [cotsMuebles, setCotsMuebles] = useState([])
+  const [facsMuebles, setFacsMuebles] = useState([])
+  const [notasEdit, setNotasEdit] = useState({})
 
   useEffect(() => { cargarDatos() }, [])
 
   async function cargarDatos() {
     setLoading(true)
-    const [{ data: cts }, { data: cots }, { data: trcs }, { data: pgs }, { data: oms }, { data: cms }] = await Promise.all([
+    const [{ data: cts }, { data: cots }, { data: trcs }, { data: pgs }, { data: oms }, { data: cms }, { data: fms }] = await Promise.all([
       supabase.from('contratos').select('*').eq('estado', 'Activo'),
       supabase.from('cotizaciones').select('*').order('created_at', { ascending: false }),
-      supabase.from('terceros').select('id, nombre').order('nombre'),
+      supabase.from('terceros').select('id, nombre, dir').order('nombre'),
       supabase.from('caja').select('*'),
       supabase.from('muebles_ordenes').select('*').order('created_at', { ascending: false }),
       supabase.from('muebles_cotizaciones').select('*').order('created_at', { ascending: false }),
+      supabase.from('muebles_facturas').select('*').order('created_at', { ascending: false }),
     ])
     setContratos(cts || [])
     setCotizaciones(cots || [])
@@ -31,6 +35,7 @@ function Flujo() {
     setPagos(pgs || [])
     setOrdenesMuebles(oms || [])
     setCotsMuebles(cms || [])
+    setFacsMuebles(fms || [])
     setLoading(false)
   }
 
@@ -38,27 +43,41 @@ function Flujo() {
   const fmtFecha = f => f ? f.split('-').reverse().join('/') : '—'
 
   const nombreCliente = id => terceros.find(t => t.id === id)?.nombre || id || '—'
+  const dirCliente = id => terceros.find(t => t.id === id)?.dir || ''
 
   const saldoContrato = (c) => {
     const abonos = pagos.filter(p => p.contrato_id === c.id).reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
     return (c.total || 0) - (c.anticipo || 0) - abonos
   }
-  // FLUJO DE MUEBLES
-  const cotsMueblesPend = cotsMuebles.filter(c => c.estado === 'Borrador' || c.estado === 'Pendiente')
+  // FLUJO DE MUEBLES (proceso real)
+  // 1. Cotizaciones sin facturar
+  const cotsMueblesPend = cotsMuebles.filter(c => c.estado !== 'Facturada' && c.estado !== 'Rechazada')
+  // 2. Facturas emitidas sin orden todavía
+  const facsSinOrden = facsMuebles.filter(f => f.estado === 'Activa' && !ordenesMuebles.some(o => o.factura_id === f.id))
+  // 3. Órdenes en producción
   const mueblesEnProceso = ordenesMuebles.filter(o => o.estado === 'En diseno' || o.estado === 'En produccion')
+  // 4. Órdenes terminadas (sin entregar)
   const mueblesTerminados = ordenesMuebles.filter(o => o.estado === 'Terminado')
-  const mueblesEntregados = ordenesMuebles.filter(o => o.estado === 'Entregado')
-  const saldoMueble = (o) => {
-    const abonos = pagos.filter(p => p.contrato_id === o.id).reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
-    return (o.total || 0) - (o.anticipo || 0) - abonos
+  // 5. Entregados con saldo (por cobrar)
+  const saldoMuebleFactura = (facturaId) => {
+    const f = facsMuebles.find(x => x.id === facturaId)
+    if (!f) return 0
+    const abonos = pagos.filter(p => p.muebles_factura_id === facturaId).reduce((s, p) => s + (parseFloat(p.monto) || 0), 0)
+    return (f.total || 0) - (f.anticipo || 0) - abonos
   }
-  const mueblesPorCobrar = ordenesMuebles.filter(o => saldoMueble(o) > 0)
-
+  const mueblesEntregados = ordenesMuebles.filter(o => o.estado === 'Entregado')
+  
   async function marcarEntregado(contrato) {
     if (!window.confirm(`¿Confirmar la entrega de ${nombreCliente(contrato.cliente_id)}? Pasará a "En Campo".`)) return
     const { error } = await supabase.from('contratos')
       .update({ entregado: true, fecha_entrega: new Date().toISOString().slice(0, 10) })
       .eq('id', contrato.id)
+    if (error) { alert('Error: ' + error.message); return }
+    await cargarDatos()
+  }
+  async function guardarNotasOrden(ordenId) {
+    const texto = notasEdit[ordenId] ?? ''
+    const { error } = await supabase.from('muebles_ordenes').update({ notas: texto }).eq('id', ordenId)
     if (error) { alert('Error: ' + error.message); return }
     await cargarDatos()
   }
@@ -363,14 +382,14 @@ function Flujo() {
       {negocio === 'muebles' && (
       <div className="grid grid-cols-5 gap-3">
 
-        {/* COL 1: COTIZACIONES MUEBLES */}
+        {/* COL 1: COTIZACIONES */}
         <div className="bg-gray-50 rounded-xl overflow-hidden">
           <div className="p-3 bg-gradient-to-r from-[#5B21B6] to-[#7C3AED]">
             <div className="flex items-center justify-between">
               <span className="text-white text-xs font-bold">📝 Cotizaciones</span>
               <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{cotsMueblesPend.length}</span>
             </div>
-            <p className="text-purple-200 text-xs mt-0.5">Pendientes de aprobar</p>
+            <p className="text-purple-200 text-xs mt-0.5">Sin facturar</p>
           </div>
           <div className="p-2 flex flex-col gap-2">
             {cotsMueblesPend.length === 0 ? (
@@ -388,11 +407,36 @@ function Flujo() {
           </div>
         </div>
 
-        {/* COL 2: EN PROCESO */}
+        {/* COL 2: FACTURADAS (sin orden) */}
+        <div className="bg-gray-50 rounded-xl overflow-hidden">
+          <div className="p-3 bg-gradient-to-r from-[#27500A] to-[#3F7A15]">
+            <div className="flex items-center justify-between">
+              <span className="text-white text-xs font-bold">🧾 Facturadas</span>
+              <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{facsSinOrden.length}</span>
+            </div>
+            <p className="text-green-200 text-xs mt-0.5">Pendiente emitir orden</p>
+          </div>
+          <div className="p-2 flex flex-col gap-2">
+            {facsSinOrden.length === 0 ? (
+              <div className="p-4 text-center text-gray-300 text-xs">Nada pendiente</div>
+            ) : facsSinOrden.map(f => (
+              <div key={f.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-xs text-gray-800">{nombreCliente(f.cliente_id)}</div>
+                  <span className="text-xs font-bold text-[#27500A]">{f.id_doc || '—'}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">{f.descripcion || '—'}</div>
+                <div className="text-xs font-bold text-[#27500A] mt-1">{fmt(f.total)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* COL 3: EN PRODUCCIÓN */}
         <div className="bg-gray-50 rounded-xl overflow-hidden">
           <div className="p-3 bg-gradient-to-r from-[#1E3A8A] to-[#185FA5]">
             <div className="flex items-center justify-between">
-              <span className="text-white text-xs font-bold">🔨 En Proceso</span>
+              <span className="text-white text-xs font-bold">🔨 En Producción</span>
               <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{mueblesEnProceso.length}</span>
             </div>
             <p className="text-blue-200 text-xs mt-0.5">Diseño y producción</p>
@@ -413,7 +457,7 @@ function Flujo() {
           </div>
         </div>
 
-        {/* COL 3: TERMINADOS */}
+        {/* COL 4: TERMINADOS */}
         <div className="bg-gray-50 rounded-xl overflow-hidden">
           <div className="p-3 bg-gradient-to-r from-[#065F46] to-[#059669]">
             <div className="flex items-center justify-between">
@@ -433,60 +477,54 @@ function Flujo() {
                 </div>
                 <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
                 <div className="text-xs font-bold text-green-700 mt-1">{fmt(o.total)}</div>
+                {dirCliente(o.cliente_id) && (
+                  <div className="flex gap-1 mt-1">
+                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dirCliente(o.cliente_id))}`} target="_blank" rel="noreferrer"
+                      className="flex-1 text-center px-2 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded hover:bg-blue-100">🗺️ Maps</a>
+                    <a href={`https://waze.com/ul?q=${encodeURIComponent(dirCliente(o.cliente_id))}`} target="_blank" rel="noreferrer"
+                      className="flex-1 text-center px-2 py-1 bg-cyan-50 text-cyan-700 text-xs font-semibold rounded hover:bg-cyan-100">🚗 Waze</a>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
 
-        {/* COL 4: ENTREGADOS */}
+        {/* COL 5: ENTREGADOS / POR COBRAR */}
         <div className="bg-gray-50 rounded-xl overflow-hidden">
-          <div className="p-3 bg-gradient-to-r from-[#7C2D12] to-[#EA580C]">
+          <div className="p-3 bg-gradient-to-r from-[#7C2D12] to-[#DC2626]">
             <div className="flex items-center justify-between">
               <span className="text-white text-xs font-bold">📦 Entregados</span>
               <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{mueblesEntregados.length}</span>
             </div>
-            <p className="text-orange-200 text-xs mt-0.5">Entregados al cliente</p>
+            <p className="text-red-200 text-xs mt-0.5">Entregado — saldo pendiente</p>
           </div>
           <div className="p-2 flex flex-col gap-2">
             {mueblesEntregados.length === 0 ? (
               <div className="p-4 text-center text-gray-300 text-xs">Nada entregado</div>
-            ) : mueblesEntregados.map(o => (
-              <div key={o.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
-                  <span className="text-xs font-bold text-[#EA580C]">{o.id_doc || '—'}</span>
-                </div>
-                <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* COL 5: POR COBRAR */}
-        <div className="bg-gray-50 rounded-xl overflow-hidden">
-          <div className="p-3 bg-gradient-to-r from-[#7C2D12] to-[#DC2626]">
-            <div className="flex items-center justify-between">
-              <span className="text-white text-xs font-bold">💰 Por Cobrar</span>
-              <span className="bg-white bg-opacity-25 text-white text-xs px-2 py-0.5 rounded-full font-bold">{mueblesPorCobrar.length}</span>
-            </div>
-            <p className="text-red-200 text-xs mt-0.5">Con saldo pendiente</p>
-          </div>
-          <div className="p-2 flex flex-col gap-2">
-            {mueblesPorCobrar.length === 0 ? (
-              <div className="p-4 text-center text-gray-300 text-xs">Sin cobros pendientes</div>
-            ) : mueblesPorCobrar.map(o => {
-              const saldo = saldoMueble(o)
+            ) : mueblesEntregados.map(o => {
+              const saldo = saldoMuebleFactura(o.factura_id)
               return (
                 <div key={o.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
-                    <span className="text-xs font-bold text-[#DC2626]">{o.id_doc || '—'}</span>
+                    <span className="text-xs font-bold text-[#EA580C]">{o.id_doc || '—'}</span>
                   </div>
-                  <div className="mt-2 p-2 bg-red-50 rounded-lg">
-                    <div className="text-xs text-gray-500">Saldo pendiente</div>
-                    <div className="text-base font-bold text-red-600">{fmt(saldo)}</div>
-                    <div className="text-xs text-gray-400">de {fmt(o.total)}</div>
+                  <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
+                  <div className={`text-xs font-bold mt-1 ${saldo > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {saldo > 0 ? `💰 Saldo ${fmt(saldo)}` : '✓ Pagado'}
                   </div>
+                  <textarea
+                    value={notasEdit[o.id] ?? o.notas ?? ''}
+                    onChange={e => setNotasEdit({ ...notasEdit, [o.id]: e.target.value })}
+                    onBlur={() => guardarNotasOrden(o.id)}
+                    placeholder="Notas..."
+                    rows={2}
+                    className="w-full mt-2 px-2 py-1 border border-gray-200 rounded text-xs" />
+                  <button onClick={() => imprimirActaMuebles(o, terceros.find(t => t.id === o.cliente_id), o.items, o.notas)}
+                    className="mt-1 w-full px-2 py-1.5 bg-[#5B21B6] text-white text-xs font-semibold rounded-lg hover:opacity-90">
+                    📄 Acta de muebles
+                  </button>
                 </div>
               )
             })}

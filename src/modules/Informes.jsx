@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { exportarExcel } from '../utils/exportarExcel'
+import { imprimirConMembrete } from '../utils/membrete'
 
 function Informes() {
   const [lineas, setLineas] = useState([])
@@ -59,6 +60,27 @@ function Informes() {
     exportarExcel(filas, `estado-resultados_${desde}_a_${hasta}`, 'Estado de Resultados')
   }
 
+  function imprimirEstadoResultados() {
+    let filas = ''
+    filas += `<tr class="tot"><td>INGRESOS DE ACTIVIDADES ORDINARIAS</td><td class="der">${fmt(ingresosOrd)}</td></tr>`
+    detIngresos.forEach(d => filas += `<tr><td style="padding-left:20px">${d.codigo} · ${d.nombre}</td><td class="der">${fmt(d.valor)}</td></tr>`)
+    filas += `<tr class="tot"><td>(−) COSTO DE VENTAS</td><td class="der">${fmt(-costos)}</td></tr>`
+    detCostos.forEach(d => filas += `<tr><td style="padding-left:20px">${d.codigo} · ${d.nombre}</td><td class="der">${fmt(d.valor)}</td></tr>`)
+    filas += `<tr class="tot"><td>= UTILIDAD BRUTA</td><td class="der">${fmt(utilidadBruta)}</td></tr>`
+    filas += `<tr class="tot"><td>(−) GASTOS OPERACIONALES</td><td class="der">${fmt(-gastos)}</td></tr>`
+    detGastos.forEach(d => filas += `<tr><td style="padding-left:20px">${d.codigo} · ${d.nombre}</td><td class="der">${fmt(d.valor)}</td></tr>`)
+    filas += `<tr class="tot"><td>= UTILIDAD OPERACIONAL</td><td class="der">${fmt(utilidadOperacional)}</td></tr>`
+    if (detOtros.length > 0) {
+      filas += `<tr class="tot"><td>(+) OTROS INGRESOS</td><td class="der">${fmt(otrosIngresos)}</td></tr>`
+      detOtros.forEach(d => filas += `<tr><td style="padding-left:20px">${d.codigo} · ${d.nombre}</td><td class="der">${fmt(d.valor)}</td></tr>`)
+    }
+    filas += `<tr class="tot" style="font-size:14px"><td>= UTILIDAD NETA DEL PERIODO</td><td class="der">${fmt(utilidadNeta)}</td></tr>`
+    const contenido = `
+      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:10px">Del ${desde} al ${hasta} · Bajo NIIF para PYMES</p>
+      <table><thead><tr><th>Concepto</th><th class="der">Valor</th></tr></thead><tbody>${filas}</tbody></table>`
+    imprimirConMembrete('Estado de Resultados', contenido, '#185FA5')
+  }
+
   function exportarCartera() {
     const filas = carteraPorCliente.map(c => ({ Cliente: c.nombre, Saldo: c.saldo }))
     filas.push({ Cliente: 'TOTAL CARTERA', Saldo: totalCartera })
@@ -81,6 +103,35 @@ function Informes() {
     exportarExcel(filas, `balance-general_al_${hasta}`, 'Balance General')
   }
 
+  function imprimirBalance() {
+    let filas = ''
+    filas += `<tr class="tot"><td colspan="2">ACTIVOS</td></tr>`
+    detActivos.forEach(d => filas += `<tr><td style="padding-left:20px">${d.codigo} · ${d.nombre}</td><td class="der">${fmt(d.valor)}</td></tr>`)
+    filas += `<tr class="tot"><td>TOTAL ACTIVOS</td><td class="der">${fmt(totalActivos)}</td></tr>`
+    filas += `<tr class="tot"><td colspan="2">PASIVOS</td></tr>`
+    detPasivos.forEach(d => filas += `<tr><td style="padding-left:20px">${d.codigo} · ${d.nombre}</td><td class="der">${fmt(d.valor)}</td></tr>`)
+    filas += `<tr class="tot"><td>TOTAL PASIVOS</td><td class="der">${fmt(totalPasivos)}</td></tr>`
+    filas += `<tr class="tot"><td colspan="2">PATRIMONIO</td></tr>`
+    detPatrimonio.forEach(d => filas += `<tr><td style="padding-left:20px">${d.codigo} · ${d.nombre}</td><td class="der">${fmt(d.valor)}</td></tr>`)
+    filas += `<tr><td style="padding-left:20px">Resultado del ejercicio</td><td class="der">${fmt(utilidadAcumulada)}</td></tr>`
+    filas += `<tr class="tot"><td>TOTAL PATRIMONIO</td><td class="der">${fmt(totalPatrimonio)}</td></tr>`
+    filas += `<tr class="tot" style="font-size:14px"><td>TOTAL PASIVO + PATRIMONIO</td><td class="der">${fmt(totalPasivoPatrimonio)}</td></tr>`
+    const contenido = `
+      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:10px">Estado de Situación Financiera al ${hasta} · Bajo NIIF para PYMES</p>
+      <table><thead><tr><th>Concepto</th><th class="der">Valor</th></tr></thead><tbody>${filas}</tbody></table>`
+    imprimirConMembrete('Balance General', contenido, '#185FA5')
+  }
+
+  function imprimirCartera() {
+    let filas = ''
+    carteraPorCliente.forEach(c => filas += `<tr><td>${c.nombre}</td><td class="der">${fmt(c.saldo)}</td></tr>`)
+    filas += `<tr class="tot"><td>TOTAL CARTERA</td><td class="der">${fmt(totalCartera)}</td></tr>`
+    const contenido = `
+      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:10px">Cartera por cliente al ${hasta}</p>
+      <table><thead><tr><th>Cliente</th><th class="der">Saldo</th></tr></thead><tbody>${filas}</tbody></table>`
+    imprimirConMembrete('Cartera por Cliente', contenido, '#185FA5')
+  }
+
   function exportarAuxiliar() {
     if (movimientosAux.length === 0) { alert('No hay movimientos para exportar'); return }
     const filas = movimientosAux.map(l => ({
@@ -95,11 +146,34 @@ function Informes() {
     exportarExcel(filas, `auxiliar_${cuentaAux || 'todas'}_${nitAux || ''}_${desde}_a_${hasta}`, 'Libro auxiliar')
   }
 
+  function imprimirAuxiliar() {
+    if (movimientosAux.length === 0) { alert('No hay movimientos para imprimir'); return }
+    let filas = ''
+    movimientosAux.forEach(l => filas += `<tr><td>${l.fecha || ''}</td><td>${l.documento_id || ''}</td><td>${l.cuenta_codigo} · ${l.cuenta_nombre || ''}</td><td>${nombreTercero(l.tercero_id)}</td><td class="der">${l.debe ? fmt(l.debe) : ''}</td><td class="der">${l.haber ? fmt(l.haber) : ''}</td><td class="der">${fmt(l.saldo)}</td></tr>`)
+    filas += `<tr class="tot"><td colspan="4">TOTALES</td><td class="der">${fmt(totalDebeAux)}</td><td class="der">${fmt(totalHaberAux)}</td><td class="der">${fmt(totalDebeAux - totalHaberAux)}</td></tr>`
+    const cta = cuentaAux ? `${cuentaAux} · ${cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre || ''}` : 'Todas las cuentas'
+    const contenido = `
+      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:10px">${cta} · del ${desde} al ${hasta}</p>
+      <table><thead><tr><th>Fecha</th><th>Documento</th><th>Cuenta</th><th>Tercero</th><th class="der">Debe</th><th class="der">Haber</th><th class="der">Saldo</th></tr></thead><tbody>${filas}</tbody></table>`
+    imprimirConMembrete('Libro Auxiliar', contenido, '#185FA5')
+  }
+
   function exportarSaldosTercero() {
     if (!cuentaAux || saldosPorTercero.length === 0) { alert('No hay saldos para exportar'); return }
     const filas = saldosPorTercero.map(x => ({ Tercero: x.nombre, Saldo: x.saldo }))
     filas.push({ Tercero: 'TOTAL', Saldo: totalSaldosTercero })
     exportarExcel(filas, `saldos-por-tercero_${cuentaAux}_al_${hasta}`, 'Saldos por tercero')
+  }
+
+  function imprimirSaldosTercero() {
+    const cta = cuentasConMovimiento.find(c => c.codigo === cuentaAux)
+    let filas = ''
+    saldosPorTercero.forEach(x => filas += `<tr><td>${x.nombre}</td><td class="der">${fmt(x.saldo)}</td></tr>`)
+    filas += `<tr class="tot"><td>TOTAL</td><td class="der">${fmt(totalSaldosTercero)}</td></tr>`
+    const contenido = `
+      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:10px">${cuentaAux} · ${cta?.nombre || ''} — saldos al ${hasta}</p>
+      <table><thead><tr><th>Tercero</th><th class="der">Saldo</th></tr></thead><tbody>${filas}</tbody></table>`
+    imprimirConMembrete('Saldos por Tercero', contenido, '#185FA5')
   }
 
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
@@ -271,6 +345,16 @@ function Informes() {
       </div>
 
       {informe === 'resultados' && (<>
+      <div className="flex justify-end gap-2 mb-3">
+        <button onClick={imprimirEstadoResultados}
+          className="px-4 py-2 bg-[#185FA5] text-white text-xs font-bold rounded-lg hover:opacity-90">
+          🖨️ Imprimir
+        </button>
+        <button onClick={exportarEstadoResultados}
+          className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+          ⬇ Exportar Excel
+        </button>
+      </div>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end">
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Desde</label>
@@ -328,6 +412,10 @@ function Informes() {
             <label className="block text-xs font-semibold text-gray-500 mb-1">Corte a la fecha</label>
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
           </div>
+          <button onClick={imprimirCartera}
+            className="px-4 py-2 bg-[#185FA5] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            🖨️ Imprimir
+          </button>
           <button onClick={exportarCartera}
             className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
             ⬇ Exportar Excel
@@ -377,6 +465,10 @@ function Informes() {
             <label className="block text-xs font-semibold text-gray-500 mb-1">Corte a la fecha</label>
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
           </div>
+          <button onClick={imprimirBalance}
+            className="px-4 py-2 bg-[#185FA5] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            🖨️ Imprimir
+          </button>
           <button onClick={exportarBalance}
             className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
             ⬇ Exportar Excel
@@ -468,6 +560,10 @@ function Informes() {
             <label className="block text-xs font-semibold text-gray-500 mb-1">Hasta</label>
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
           </div>
+          <button onClick={imprimirAuxiliar}
+            className="px-4 py-2 bg-[#185FA5] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            🖨️ Imprimir
+          </button>
           <button onClick={exportarAuxiliar}
             className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
             ⬇ Exportar Excel
@@ -540,6 +636,10 @@ function Informes() {
             <label className="block text-xs font-semibold text-gray-500 mb-1">Corte a la fecha</label>
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
           </div>
+          <button onClick={imprimirSaldosTercero}
+            className="px-4 py-2 bg-[#185FA5] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            🖨️ Imprimir
+          </button>
           <button onClick={exportarSaldosTercero}
             className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
             ⬇ Exportar Excel

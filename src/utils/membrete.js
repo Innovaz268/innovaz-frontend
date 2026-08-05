@@ -51,6 +51,10 @@ export function imprimirConMembrete(titulo, contenidoHTML, color = '#185FA5') {
     ${membreteHTML(color)}
     <div class="titulo"><h2>${titulo}</h2></div>
     ${contenidoHTML}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:70px;">
+      <div style="border-top:1px solid #333;padding-top:6px;text-align:center;font-size:12px;">Representante</div>
+      <div style="border-top:1px solid #333;padding-top:6px;text-align:center;font-size:12px;">Contador</div>
+    </div>
     <script>window.onload = function() { window.print(); }</script>
   </body>
   </html>`

@@ -11,7 +11,7 @@ function Equipos() {
   const [editandoId, setEditandoId] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
-  const [form, setForm] = useState({ nombre: '', categoria: '', tarifa: '', stock: '', costo_compra: '', proveedor: '', forma_pago: 'Contado' })
+  const [form, setForm] = useState({ nombre: '', categoria: '', tarifa: '', stock: '', costo_compra: '', proveedor: '', forma_pago: 'Contado', inventario_inicial: false })
 
   useEffect(() => { cargarEquipos() }, [])
 
@@ -41,7 +41,7 @@ function Equipos() {
     if (!form.nombre.trim()) { setMensaje('El nombre es obligatorio'); return }
     setGuardando(true)
     setMensaje('')
-    const { forma_pago, ...formSinPago } = form
+    const { forma_pago, inventario_inicial, ...formSinPago } = form
     const datos = { ...formSinPago, tarifa: parseFloat(form.tarifa) || 0, stock: editandoId ? (parseInt(form.stock) || 0) : 0, costo_compra: parseFloat(form.costo_compra) || 0 }
     let error
     if (editandoId) {
@@ -55,9 +55,9 @@ function Equipos() {
           equipo_id: res.data.id,
           tipo: 'Entrada',
           cantidad: parseInt(form.stock) || 0,
-          observacion: 'Compra inicial de equipo'
+          observacion: form.inventario_inicial ? 'Inventario inicial' : 'Compra inicial de equipo'
         })
-        if ((parseFloat(form.costo_compra) || 0) > 0) {
+        if (!form.inventario_inicial && (parseFloat(form.costo_compra) || 0) > 0) {
           await asientoCompraEquipo(res.data, form.forma_pago)
         }
       }
@@ -158,6 +158,15 @@ function Equipos() {
                 <option value="Credito">Crédito con proveedor</option>
                 <option value="Aporte">Aporte de socio</option>
               </select>
+            </div>
+            <div className="col-span-2">
+              <label className="flex items-center gap-2 cursor-pointer p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                <input type="checkbox" checked={form.inventario_inicial}
+                  onChange={e => setForm({...form, inventario_inicial: e.target.checked})} />
+                <span className="text-xs text-amber-700">
+                  <strong>Inventario inicial</strong> — carga el stock sin generar asiento de compra (el valor se registra aparte como aporte de capital)
+                </span>
+              </label>
             </div>
           </div>
           <div className="mt-3 flex justify-end">

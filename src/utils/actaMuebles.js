@@ -10,7 +10,7 @@ const EMPRESA = {
 const fmt = n => '₡' + Math.round(n || 0).toLocaleString('es-CR')
 const fmtFecha = f => f || '—'
 
-export function imprimirActaMuebles(orden, cliente, items, notas) {
+export function imprimirActaMuebles(orden, cliente, items, notas, firma) {
   const filas = (items || []).map((it, i) => `
     <tr>
       <td style="border:1px solid #ccc;padding:6px;text-align:center">${i + 1}</td>
@@ -91,8 +91,11 @@ export function imprimirActaMuebles(orden, cliente, items, notas) {
 
     <div class="firmas">
       <div class="firma">Entrega — INNOVAZ</div>
-      <div class="firma">Recibe conforme — ${cliente?.nombre || 'Cliente'}</div>
-    </div>
+      <div class="firma">
+        ${firma ? `<img src="${firma}" style="height:45px;object-fit:contain;display:block;margin:-52px auto 4px;">` : ''}
+        Recibe conforme — ${cliente?.nombre || 'Cliente'}
+      </div>
+    </div>  
 
     <script>
       window.onload = function() { window.print(); }

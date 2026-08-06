@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { imprimirActaEntrega } from '../utils/actaEntrega'
 import { imprimirActaMuebles } from '../utils/actaMuebles'
+import PanelFirma from '../components/PanelFirma'
 
 function Flujo() {
   const [contratos, setContratos] = useState([])
@@ -15,6 +16,7 @@ function Flujo() {
   const [cotsMuebles, setCotsMuebles] = useState([])
   const [facsMuebles, setFacsMuebles] = useState([])
   const [notasEdit, setNotasEdit] = useState({})
+  const [firmandoOrden, setFirmandoOrden] = useState(null)
 
   useEffect(() => { cargarDatos() }, [])
 
@@ -521,7 +523,11 @@ function Flujo() {
                     placeholder="Notas..."
                     rows={2}
                     className="w-full mt-2 px-2 py-1 border border-gray-200 rounded text-xs" />
-                  <button onClick={() => imprimirActaMuebles(o, terceros.find(t => t.id === o.cliente_id), o.items, o.notas)}
+                  <button onClick={() => setFirmandoOrden(o.id)}
+                    className="mt-1 w-full px-2 py-1.5 bg-white border border-[#5B21B6] text-[#5B21B6] text-xs font-semibold rounded-lg hover:bg-purple-50">
+                    {o.firma_entrega ? '✓ Firmado — volver a firmar' : '✍️ Firmar entrega'}
+                  </button>
+                  <button onClick={() => imprimirActaMuebles(o, terceros.find(t => t.id === o.cliente_id), o.items, o.notas, o.firma_entrega)}
                     className="mt-1 w-full px-2 py-1.5 bg-[#5B21B6] text-white text-xs font-semibold rounded-lg hover:opacity-90">
                     📄 Acta de muebles
                   </button>
@@ -532,6 +538,18 @@ function Flujo() {
         </div>
 
       </div>
+      )}
+    {firmandoOrden && (
+        <PanelFirma
+          titulo="Firma de entrega del cliente"
+          onCancelar={() => setFirmandoOrden(null)}
+          onGuardar={async (dataURL) => {
+            const { error } = await supabase.from('muebles_ordenes').update({ firma_entrega: dataURL }).eq('id', firmandoOrden)
+            if (error) { alert('Error: ' + error.message); return }
+            setFirmandoOrden(null)
+            await cargarDatos()
+          }}
+        />
       )}
     </div>
   )

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { siguienteConsecutivo } from '../utils/consecutivo'
 import { asientoPago } from '../utils/asientosAuto'
+import { imprimirConMembrete } from '../utils/membrete'
+import PanelFirma from '../components/PanelFirma'
 
 function Caja() {
   const [pagos, setPagos] = useState([])
@@ -12,6 +14,7 @@ function Caja() {
   const [mostrarForm, setMostrarForm] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [firmandoPago, setFirmandoPago] = useState(null)
   const [form, setForm] = useState({
     contrato_id: '', fecha: new Date().toISOString().slice(0,10),
     monto: '', metodo: 'Efectivo', concepto: 'Abono factura'
@@ -69,6 +72,25 @@ function Caja() {
     setMostrarForm(false)
     await cargarDatos()
     setGuardando(false)
+  }
+
+  function imprimirRecibo(p) {
+    const contrato = contratos.find(c => c.id === p.contrato_id)
+    const facMueble = facturasMuebles.find(f => f.id === p.muebles_factura_id)
+    const clienteId = contrato?.cliente_id || facMueble?.cliente_id
+    const trc = terceros.find(t => t.id === clienteId)
+    const docRef = contrato?.id_doc || facMueble?.id_doc || '—'
+    const contenido = `
+      <table style="margin-bottom:20px">
+        <tr><td class="tot" style="width:35%">Recibo N°</td><td>${p.id_doc || '—'}</td></tr>
+        <tr><td class="tot">Fecha</td><td>${p.fecha || '—'}</td></tr>
+        <tr><td class="tot">Recibí de</td><td>${trc?.nombre || '—'}</td></tr>
+        <tr><td class="tot">Por concepto de</td><td>${p.concepto || '—'} (Factura ${docRef})</td></tr>
+        <tr><td class="tot">Forma de pago</td><td>${p.metodo || '—'}</td></tr>
+        <tr><td class="tot">Valor recibido</td><td style="font-size:16px;font-weight:bold">${fmt(p.monto)}</td></tr>
+      </table>
+      ${p.firma ? `<div style="text-align:center;margin-top:50px"><img src="${p.firma}" style="height:50px"><div style="border-top:1px solid #333;width:200px;margin:4px auto 0;padding-top:4px;font-size:12px">Recibí conforme</div></div>` : `<div style="text-align:center;margin-top:70px"><div style="border-top:1px solid #333;width:200px;margin:0 auto;padding-top:4px;font-size:12px">Recibí conforme</div></div>`}`
+    imprimirConMembrete('Recibo de Caja', contenido, '#27500A')
   }
 
   async function eliminarPago(id) {
@@ -240,7 +262,9 @@ function Caja() {
                       <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-50 text-blue-700">{p.metodo}</span>
                     </td>
                     <td className="px-4 py-2 text-xs font-bold text-[#27500A]">{fmt(p.monto)}</td>
-                    <td className="px-4 py-2 text-right">
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      <button onClick={() => setFirmandoPago(p.id)} className="text-xs text-[#5B21B6] hover:underline mr-2">{p.firma ? '✓ Firmado' : '✍️ Firmar'}</button>
+                      <button onClick={() => imprimirRecibo(p)} className="text-xs text-[#185FA5] hover:underline mr-2">🖨️ Recibo</button>
                       <button onClick={() => eliminarPago(p.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                     </td>
                   </tr>
@@ -251,6 +275,18 @@ function Caja() {
         )}
       </div>
 
+      {firmandoPago && (
+        <PanelFirma
+          titulo="Firma de quien recibe el pago"
+          onCancelar={() => setFirmandoPago(null)}
+          onGuardar={async (dataURL) => {
+            const { error } = await supabase.from('caja').update({ firma: dataURL }).eq('id', firmandoPago)
+            if (error) { alert('Error: ' + error.message); return }
+            setFirmandoPago(null)
+            await cargarDatos()
+          }}
+        />
+      )}
     </div>
   )
 }

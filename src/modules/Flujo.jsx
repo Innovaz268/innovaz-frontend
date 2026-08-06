@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
-import { imprimirActaEntrega } from '../utils/actaEntrega'
+import { imprimirActaEntrega, compartirActaEntrega } from '../utils/actaEntrega'
 import { imprimirActaMuebles } from '../utils/actaMuebles'
 import PanelFirma from '../components/PanelFirma'
 
@@ -260,6 +260,10 @@ function Flujo() {
                   <button onClick={() => imprimirActaEntrega(c, terceros.find(t => t.id === c.cliente_id), items, c.firma)}
                     className="mt-1 w-full px-2 py-1.5 bg-[#185FA5] text-white text-xs font-semibold rounded-lg hover:opacity-90">
                     📄 Acta de entrega
+                  </button>
+                  <button onClick={() => compartirActaEntrega(c, terceros.find(t => t.id === c.cliente_id), items, c.firma)}
+                    className="mt-1 w-full px-2 py-1.5 bg-[#25D366] text-white text-xs font-semibold rounded-lg hover:opacity-90">
+                    📲 Compartir acta
                   </button>
                   <button onClick={() => marcarEntregado(c)}
                     className="mt-1 w-full px-2 py-1.5 bg-[#27500A] text-white text-xs font-semibold rounded-lg hover:opacity-90">

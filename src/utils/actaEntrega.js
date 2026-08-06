@@ -1,4 +1,6 @@
 // Genera e imprime un Acta de Entrega de alquiler en una ventana nueva
+import { compartirDocumento } from './compartir'
+
 const LOGO = 'https://kdfoptwfvqyexhcgllyt.supabase.co/storage/v1/object/public/publico/InnovazLogo.png'
 const EMPRESA = {
   nombre: 'INNOVAZ',
@@ -10,7 +12,7 @@ const EMPRESA = {
 const fmt = n => '₡' + Math.round(n || 0).toLocaleString('es-CR')
 const fmtFecha = f => f || '—'
 
-export function imprimirActaEntrega(factura, cliente, items, firma) {   
+export function htmlActaEntrega(factura, cliente, items, firma) {   
   const filas = (items || []).map((it, i) => `
     <tr>
       <td style="border:1px solid #ccc;padding:6px;text-align:center">${i + 1}</td>
@@ -95,13 +97,22 @@ export function imprimirActaEntrega(factura, cliente, items, firma) {
       </div>
     </div>
 
-    <script>
-      window.onload = function() { window.print(); }
-    </script>
-  </body>
+    </body>
   </html>`
 
+  return html
+}
+
+// Imprime el acta (abre ventana de impresión)
+export function imprimirActaEntrega(factura, cliente, items, firma) {
+  const html = htmlActaEntrega(factura, cliente, items, firma)
+  const conScript = html.replace('</body>', '<script>window.onload = function() { window.print(); }</script></body>')
   const ventana = window.open('', '_blank')
-  ventana.document.write(html)
+  ventana.document.write(conScript)
   ventana.document.close()
+}
+// Comparte el acta como PDF (WhatsApp, correo, etc.)
+export function compartirActaEntrega(factura, cliente, items, firma) {
+  const html = htmlActaEntrega(factura, cliente, items, firma)
+  compartirDocumento(html, `Acta-${factura.id_doc || 'entrega'}`, `Acta de entrega ${factura.id_doc || ''} — INNOVAZ`)
 }

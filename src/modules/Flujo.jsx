@@ -17,6 +17,7 @@ function Flujo() {
   const [facsMuebles, setFacsMuebles] = useState([])
   const [notasEdit, setNotasEdit] = useState({})
   const [firmandoOrden, setFirmandoOrden] = useState(null)
+  const [firmandoContrato, setFirmandoContrato] = useState(null)
 
   useEffect(() => { cargarDatos() }, [])
 
@@ -252,6 +253,14 @@ function Flujo() {
                         className="flex-1 text-center px-2 py-1 bg-cyan-50 text-cyan-700 text-xs font-semibold rounded hover:bg-cyan-100">🚗 Waze</a>
                     </div>
                   )}
+                  <button onClick={() => setFirmandoContrato(c.id)}
+                    className="mt-1 w-full px-2 py-1.5 bg-white border border-[#185FA5] text-[#185FA5] text-xs font-semibold rounded-lg hover:bg-blue-50">
+                    {c.firma ? '✓ Firmado — volver a firmar' : '✍️ Firmar entrega'}
+                  </button>
+                  <button onClick={() => imprimirActaEntrega(c, terceros.find(t => t.id === c.cliente_id), items, c.firma)}
+                    className="mt-1 w-full px-2 py-1.5 bg-[#185FA5] text-white text-xs font-semibold rounded-lg hover:opacity-90">
+                    📄 Acta de entrega
+                  </button>
                   <button onClick={() => marcarEntregado(c)}
                     className="mt-1 w-full px-2 py-1.5 bg-[#27500A] text-white text-xs font-semibold rounded-lg hover:opacity-90">
                     ✓ Confirmar entrega
@@ -325,8 +334,12 @@ function Flujo() {
                   <div className={`text-xs font-bold mt-1 ${saldo > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {saldo > 0 ? `💰 ${fmt(saldo)}` : '✓ Pagado'}
                   </div>
-                  <button onClick={() => imprimirActaEntrega(c, terceros.find(t => t.id === c.cliente_id), items)}
-                    className="mt-2 w-full px-2 py-1.5 bg-[#185FA5] text-white text-xs font-semibold rounded-lg hover:opacity-90">
+                  <button onClick={() => setFirmandoContrato(c.id)}
+                    className="mt-2 w-full px-2 py-1.5 bg-white border border-[#185FA5] text-[#185FA5] text-xs font-semibold rounded-lg hover:bg-blue-50">
+                    {c.firma ? '✓ Firmado — volver a firmar' : '✍️ Firmar entrega'}
+                  </button>
+                  <button onClick={() => imprimirActaEntrega(c, terceros.find(t => t.id === c.cliente_id), items, c.firma)}
+                    className="mt-1 w-full px-2 py-1.5 bg-[#185FA5] text-white text-xs font-semibold rounded-lg hover:opacity-90">
                     📄 Acta de entrega
                   </button>
                 </div>
@@ -538,6 +551,18 @@ function Flujo() {
         </div>
 
       </div>
+      )}
+      {firmandoContrato && (
+        <PanelFirma
+          titulo="Firma de entrega del cliente"
+          onCancelar={() => setFirmandoContrato(null)}
+          onGuardar={async (dataURL) => {
+            const { error } = await supabase.from('contratos').update({ firma: dataURL }).eq('id', firmandoContrato)
+            if (error) { alert('Error: ' + error.message); return }
+            setFirmandoContrato(null)
+            await cargarDatos()
+          }}
+        />
       )}
     {firmandoOrden && (
         <PanelFirma

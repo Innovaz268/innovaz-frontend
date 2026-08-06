@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 import { asientoFactura } from '../utils/asientosAuto'
 import { moverKardex } from '../utils/kardexAuto'
+import { imprimirConMembrete } from '../utils/membrete'
+import PanelFirma from '../components/PanelFirma'
 
 function Facturas() {
   const [contratos, setContratos] = useState([])
@@ -17,6 +19,7 @@ function Facturas() {
   const [editandoId, setEditandoId] = useState(null)
   const [mensaje, setMensaje] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [firmandoFactura, setFirmandoFactura] = useState(null)
   const [form, setForm] = useState({
     cliente_id: '', estado: 'Activo', fecha_salida: new Date().toISOString().slice(0,10),
     fecha_est_dev: '', ubicacion: '', unidad_negocio: 'ALQ',
@@ -174,6 +177,28 @@ let error
     if (!window.confirm('¿Eliminar esta factura?')) return
     await supabase.from('contratos').delete().eq('id', id)
     await cargarDatos()
+  }
+  function imprimirFactura(c) {
+    const trc = terceros.find(t => t.id === c.cliente_id)
+    const equipos = lineas.filter(l => l.contrato_id === c.id)
+    const saldoC = (c.total || 0) - (c.anticipo || 0)
+    let filasEq = ''
+    equipos.forEach((l, i) => filasEq += `<tr><td style="text-align:center">${i+1}</td><td>${l.nombre || '—'}</td><td style="text-align:center">${l.fecha_salida || '—'}</td><td style="text-align:center">${l.fecha_est_dev || '—'}</td></tr>`)
+    const contenido = `
+      <table style="margin-bottom:15px">
+        <tr><td class="tot" style="width:30%">Factura N°</td><td>${c.id_doc || '—'}</td><td class="tot" style="width:20%">Fecha</td><td>${c.fecha_salida || '—'}</td></tr>
+        <tr><td class="tot">Cliente</td><td>${trc?.nombre || '—'}</td><td class="tot">Identificación</td><td>${trc?.nit || '—'}</td></tr>
+        <tr><td class="tot">Teléfono</td><td>${trc?.tel || '—'}</td><td class="tot">Dev. estimada</td><td>${c.fecha_est_dev || '—'}</td></tr>
+        <tr><td class="tot">Ubicación</td><td colspan="3">${c.ubicacion || '—'}</td></tr>
+      </table>
+      ${equipos.length > 0 ? `<table><thead><tr><th style="width:40px">#</th><th>Equipo</th><th style="width:90px">Salida</th><th style="width:90px">Dev. est.</th></tr></thead><tbody>${filasEq}</tbody></table>` : ''}
+      <table style="margin-top:15px;width:50%;margin-left:auto">
+        <tr><td class="tot">Total</td><td class="der">${fmt(c.total)}</td></tr>
+        <tr><td class="tot">Anticipo</td><td class="der">${fmt(c.anticipo)}</td></tr>
+        <tr><td class="tot" style="font-size:14px">Saldo</td><td class="der" style="font-size:14px;font-weight:bold">${fmt(saldoC)}</td></tr>
+      </table>
+      ${c.firma ? `<div style="text-align:center;margin-top:50px"><img src="${c.firma}" style="height:50px"><div style="border-top:1px solid #333;width:220px;margin:4px auto 0;padding-top:4px;font-size:12px">Recibí conforme — ${trc?.nombre || 'Cliente'}</div></div>` : `<div style="text-align:center;margin-top:70px"><div style="border-top:1px solid #333;width:220px;margin:0 auto;padding-top:4px;font-size:12px">Recibí conforme — ${trc?.nombre || 'Cliente'}</div></div>`}`
+    imprimirConMembrete('Factura de Alquiler', contenido, '#185FA5')
   }
   async function devolverEquipo(linea) {
     const cantMax = parseFloat(linea.cantidad) || 1
@@ -460,8 +485,10 @@ let error
                     <td className="px-4 py-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${estadoBadge(c.estado)}`}>{c.estado}</span>
                     </td>
-                    <td className="px-4 py-2 text-right flex gap-2 justify-end">
+                    <td className="px-4 py-2 text-right flex gap-2 justify-end whitespace-nowrap">
                       <button onClick={() => setVerLineas(verLineas === c.id ? null : c.id)} className="text-xs text-[#185FA5] hover:underline font-semibold">Equipos</button>
+                      <button onClick={() => setFirmandoFactura(c.id)} className="text-xs text-[#5B21B6] hover:underline">{c.firma ? '✓ Firmado' : '✍️ Firmar'}</button>
+                      <button onClick={() => imprimirFactura(c)} className="text-xs text-[#185FA5] hover:underline">🖨️</button>
                       <button onClick={() => abrirEditar(c)} className="text-xs text-blue-400 hover:text-blue-600">✏️</button>
                       <button onClick={() => eliminarFactura(c.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                     </td>
@@ -530,6 +557,19 @@ let error
           </table>
         )}
       </div>
+
+      {firmandoFactura && (
+        <PanelFirma
+          titulo="Firma del cliente"
+          onCancelar={() => setFirmandoFactura(null)}
+          onGuardar={async (dataURL) => {
+            const { error } = await supabase.from('contratos').update({ firma: dataURL }).eq('id', firmandoFactura)
+            if (error) { alert('Error: ' + error.message); return }
+            setFirmandoFactura(null)
+            await cargarDatos()
+          }}
+        />
+      )}
     </div>
   )
 }

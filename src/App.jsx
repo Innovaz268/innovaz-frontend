@@ -55,6 +55,7 @@ function App() {
     if (ue?.empresa_id) {
       const { data: emp } = await supabase.from('empresas').select('*').eq('id', ue.empresa_id).maybeSingle()
       setEmpresa(emp || null)
+      if (emp) localStorage.setItem('empresa_id', emp.id)
     } else if (esSuper) {
       // Super usuario sin empresa asignada: toma la primera (luego podrá elegir)
       const { data: emp } = await supabase.from('empresas').select('*').order('created_at').limit(1).maybeSingle()

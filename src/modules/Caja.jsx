@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 import { siguienteConsecutivo } from '../utils/consecutivo'
 import { asientoPago } from '../utils/asientosAuto'
 import { imprimirConMembrete } from '../utils/membrete'
@@ -55,6 +55,7 @@ function Caja() {
       metodo: form.metodo,
       concepto: form.concepto,
       id_doc: codigo,
+      empresa_id: empresaActiva(),
     }
     if (esMueble) {
       datosRC.muebles_factura_id = idReal

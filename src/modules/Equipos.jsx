@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 import { moverKardex } from '../utils/kardexAuto'
 import { asientoCompraEquipo } from '../utils/asientosAuto'
 
@@ -42,7 +42,7 @@ function Equipos() {
     setGuardando(true)
     setMensaje('')
     const { forma_pago, inventario_inicial, ...formSinPago } = form
-    const datos = { ...formSinPago, tarifa: parseFloat(form.tarifa) || 0, stock: editandoId ? (parseInt(form.stock) || 0) : 0, costo_compra: parseFloat(form.costo_compra) || 0 }
+    const datos = { ...formSinPago, tarifa: parseFloat(form.tarifa) || 0, stock: editandoId ? (parseInt(form.stock) || 0) : 0, costo_compra: parseFloat(form.costo_compra) || 0, empresa_id: empresaActiva() }
     let error
     if (editandoId) {
       const res = await supabase.from('equipos').update(datos).eq('id', editandoId)

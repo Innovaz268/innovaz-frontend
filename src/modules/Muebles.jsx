@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 import { siguienteConsecutivo } from '../utils/consecutivo'
 import { asientoMueble, asientoCostosMueble } from '../utils/asientosAuto'
 
@@ -87,7 +87,7 @@ async function cargarDatos() {
       error = res.error
     } else {
       const codigo = await siguienteConsecutivo('CM')
-      const datos2 = { ...datos, id_doc: codigo }
+      const datos2 = { ...datos, id_doc: codigo, empresa_id: empresaActiva() }
       const res = await supabase.from('muebles_cotizaciones').insert([datos2])
       error = res.error
     }
@@ -118,7 +118,8 @@ async function cargarDatos() {
       anticipo: c.anticipo || 0,
       estado: 'Activa',
       fecha: new Date().toISOString().slice(0,10),
-      observaciones: c.observaciones
+      observaciones: c.observaciones,
+      empresa_id: empresaActiva()
     }]).select().single()
     if (error) { setMensaje('Error: ' + error.message); return }
 
@@ -147,7 +148,8 @@ async function cargarDatos() {
       items: f.items,
       total: f.total,
       anticipo: f.anticipo,
-      observaciones: f.observaciones
+      observaciones: f.observaciones,
+      empresa_id: empresaActiva()
     }])
     if (error) { setMensaje('Error: ' + error.message); return }
     setMensaje('Orden de producción emitida: ' + codigoOM)
@@ -208,7 +210,8 @@ async function cargarDatos() {
       descripcion: formCosto.descripcion,
       proveedor_id: formCosto.proveedor_id || null,
       valor: parseFloat(formCosto.valor) || 0,
-      metodo_pago: formCosto.metodo_pago
+      metodo_pago: formCosto.metodo_pago,
+      empresa_id: empresaActiva()
     }
     const { error } = await supabase.from('muebles_costos').insert([datos])
     if (error) { setMensaje('Error: ' + error.message); return }

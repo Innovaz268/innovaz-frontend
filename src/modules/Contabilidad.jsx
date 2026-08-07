@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 
 function Contabilidad() {
   const [vista, setVista] = useState('libro')
@@ -56,7 +56,7 @@ function Contabilidad() {
   async function guardarCuenta() {
     if (!formPuc.codigo || !formPuc.nombre) { setMensaje('Codigo y nombre son obligatorios'); return }
     setGuardando(true)
-    const { error } = await supabase.from('puc_cuentas').upsert([formPuc])
+    const { error } = await supabase.from('puc_cuentas').upsert([{ ...formPuc, empresa_id: empresaActiva() }])
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
     setMensaje('Cuenta guardada correctamente')
     setFormPuc({ codigo: '', nombre: '', tipo: 'ACTIVO', grupo: '', naturaleza: 'debito', nivel: 3, cuenta_padre: '', sistema: false })
@@ -110,10 +110,11 @@ function Contabilidad() {
       fecha: formAsiento.fecha,
       descripcion: formAsiento.descripcion,
       tipo_doc: formAsiento.tipo_doc,
-      documento_id: formAsiento.documento_id
+      documento_id: formAsiento.documento_id,
+      empresa_id: empresaActiva()
     }]).select().single()
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
-    const lineas = formAsiento.lineas.map(l => ({ ...l, asiento_id: asiento.id, debe: parseFloat(l.debe) || 0, haber: parseFloat(l.haber) || 0 }))
+    const lineas = formAsiento.lineas.map(l => ({ ...l, asiento_id: asiento.id, debe: parseFloat(l.debe) || 0, haber: parseFloat(l.haber) || 0, empresa_id: empresaActiva() }))
     const { error: err2 } = await supabase.from('asientos_lineas').insert(lineas)
     if (err2) { setMensaje('Error en lineas: ' + err2.message); setGuardando(false); return }
     setMensaje('Asiento registrado correctamente')
@@ -138,7 +139,7 @@ function Contabilidad() {
   async function guardarKardex() {
     if (!formKardex.equipo_id) { setMensaje('Seleccione un equipo'); return }
     setGuardando(true)
-    const { error } = await supabase.from('kardex').insert([formKardex])
+    const { error } = await supabase.from('kardex').insert([{ ...formKardex, empresa_id: empresaActiva() }])
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
     const equipo = equipos.find(e => e.id === formKardex.equipo_id)
     if (equipo) {

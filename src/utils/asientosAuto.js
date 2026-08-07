@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 import { siguienteConsecutivo } from './consecutivo'
 
 // Cuentas segun metodo de pago (NIIF)
@@ -47,13 +47,15 @@ export async function asientoFactura(factura) {
         fecha: factura.fecha_salida || new Date().toISOString().slice(0, 10),
         descripcion: 'Factura alquiler ' + (factura.id_doc || ''),
         tipo_doc: 'Factura',
-        documento_id: factura.id_doc || ''
+        documento_id: factura.id_doc || '',
+        empresa_id: empresaActiva()
       }])
       .select()
       .single()
 
     if (error) { console.error('Error asiento factura:', error); return }
 
+    const emp = empresaActiva()
     await supabase.from('asientos_lineas').insert([
       {
         asiento_id: asiento.id,
@@ -61,7 +63,8 @@ export async function asientoFactura(factura) {
         cuenta_nombre: 'Clientes',
         debe: factura.total || 0,
         haber: 0,
-        tercero_id: factura.cliente_id || ''
+        tercero_id: factura.cliente_id || '',
+        empresa_id: emp
       },
       {
         asiento_id: asiento.id,
@@ -69,7 +72,8 @@ export async function asientoFactura(factura) {
         cuenta_nombre: 'Alquiler de equipos',
         debe: 0,
         haber: factura.total || 0,
-        tercero_id: factura.cliente_id || ''
+        tercero_id: factura.cliente_id || '',
+        empresa_id: emp
       }
     ])
   } catch (e) {
@@ -88,13 +92,15 @@ export async function asientoPago(pago, clienteId) {
         fecha: pago.fecha || new Date().toISOString().slice(0, 10),
         descripcion: (pago.concepto || 'Pago') + ' ' + (pago.id_doc || ''),
         tipo_doc: 'Recibo de Caja',
-        documento_id: pago.id_doc || ''
+        documento_id: pago.id_doc || '',
+        empresa_id: empresaActiva()
       }])
       .select()
       .single()
 
     if (error) { console.error('Error asiento pago:', error); return }
 
+    const emp = empresaActiva()
     await supabase.from('asientos_lineas').insert([
       {
         asiento_id: asiento.id,
@@ -102,7 +108,8 @@ export async function asientoPago(pago, clienteId) {
         cuenta_nombre: cuentaPago.nombre,
         debe: parseFloat(pago.monto) || 0,
         haber: 0,
-        tercero_id: clienteId || ''
+        tercero_id: clienteId || '',
+        empresa_id: emp
       },
       {
         asiento_id: asiento.id,
@@ -110,7 +117,8 @@ export async function asientoPago(pago, clienteId) {
         cuenta_nombre: 'Clientes',
         debe: 0,
         haber: parseFloat(pago.monto) || 0,
-        tercero_id: clienteId || ''
+        tercero_id: clienteId || '',
+        empresa_id: emp
       }
     ])
   } catch (e) {
@@ -129,13 +137,15 @@ export async function asientoMueble(cotizacion) {
         fecha: cotizacion.fecha || new Date().toISOString().slice(0, 10),
         descripcion: 'Venta mueble ' + (cotizacion.id_doc || ''),
         tipo_doc: 'Factura',
-        documento_id: cotizacion.id_doc || ''
+        documento_id: cotizacion.id_doc || '',
+        empresa_id: empresaActiva()
       }])
       .select()
       .single()
 
     if (error) { console.error('Error asiento mueble:', error); return }
 
+    const emp = empresaActiva()
     await supabase.from('asientos_lineas').insert([
       {
         asiento_id: asiento.id,
@@ -143,7 +153,8 @@ export async function asientoMueble(cotizacion) {
         cuenta_nombre: 'Clientes',
         debe: cotizacion.total || 0,
         haber: 0,
-        tercero_id: cotizacion.cliente_id || ''
+        tercero_id: cotizacion.cliente_id || '',
+        empresa_id: emp
       },
       {
         asiento_id: asiento.id,
@@ -151,7 +162,8 @@ export async function asientoMueble(cotizacion) {
         cuenta_nombre: 'Fabricación y venta de muebles',
         debe: 0,
         haber: cotizacion.total || 0,
-        tercero_id: cotizacion.cliente_id || ''
+        tercero_id: cotizacion.cliente_id || '',
+        empresa_id: emp
       }
     ])
 
@@ -210,7 +222,8 @@ export async function asientoCostosMueble(orden, costosOrden) {
         fecha: new Date().toISOString().slice(0, 10),
         descripcion: 'Costos orden mueble ' + codigo,
         tipo_doc: 'Comprobante de Costos',
-        documento_id: codigo
+        documento_id: codigo,
+        empresa_id: empresaActiva()
       }])
       .select()
       .single()
@@ -228,7 +241,8 @@ export async function asientoCostosMueble(orden, costosOrden) {
         cuenta_nombre: cc.nombre,
         debe: valor,
         haber: 0,
-        tercero_id: c.proveedor_id || null
+        tercero_id: c.proveedor_id || null,
+        empresa_id: empresaActiva()
       })
       lineas.push({
         asiento_id: asiento.id,
@@ -236,7 +250,8 @@ export async function asientoCostosMueble(orden, costosOrden) {
         cuenta_nombre: cf.nombre,
         debe: 0,
         haber: valor,
-        tercero_id: c.proveedor_id || null
+        tercero_id: c.proveedor_id || null,
+        empresa_id: empresaActiva()
       })
     })
 
@@ -274,13 +289,15 @@ export async function asientoCompraEquipo(equipo, formaPago, terceroId = null) {
         fecha: new Date().toISOString().slice(0, 10),
         descripcion: 'Compra equipo ' + (equipo.nombre || ''),
         tipo_doc: 'Comprobante de Compra',
-        documento_id: codigo
+        documento_id: codigo,
+        empresa_id: empresaActiva()
       }])
       .select()
       .single()
 
     if (error) { console.error('Error asiento compra:', error); return { ok: false, msg: error.message } }
 
+    const emp = empresaActiva()
     await supabase.from('asientos_lineas').insert([
       {
         asiento_id: asiento.id,
@@ -288,7 +305,8 @@ export async function asientoCompraEquipo(equipo, formaPago, terceroId = null) {
         cuenta_nombre: 'Maquinaria y equipo de alquiler',
         debe: total,
         haber: 0,
-        tercero_id: terceroId
+        tercero_id: terceroId,
+        empresa_id: emp
       },
       {
         asiento_id: asiento.id,
@@ -296,7 +314,8 @@ export async function asientoCompraEquipo(equipo, formaPago, terceroId = null) {
         cuenta_nombre: fuente.nombre,
         debe: 0,
         haber: total,
-        tercero_id: terceroId
+        tercero_id: terceroId,
+        empresa_id: emp
       }
     ])
 

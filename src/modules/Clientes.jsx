@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 
 function Clientes() {
   const [terceros, setTerceros] = useState([])
@@ -44,7 +44,7 @@ function Clientes() {
       const res = await supabase.from('terceros').update(form).eq('id', editandoId)
       error = res.error
     } else {
-      const res = await supabase.from('terceros').insert([form])
+      const res = await supabase.from('terceros').insert([{ ...form, empresa_id: empresaActiva() }])
       error = res.error
     }
     if (error) { setMensaje('Error guardando: ' + error.message); setGuardando(false); return }

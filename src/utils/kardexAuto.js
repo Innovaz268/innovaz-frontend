@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 
 // Registra un movimiento en el kardex y actualiza el stock del equipo.
 // tipo: 'Entrada' (compra, devolución) suma stock; 'Salida' (alquiler) resta.
@@ -13,7 +13,8 @@ export async function moverKardex({ equipo_id, tipo, cantidad, contrato_id = nul
       cantidad: cant,
       fecha: new Date().toISOString().slice(0, 10),
       contrato_id,
-      observacion
+      observacion,
+      empresa_id: empresaActiva()
     }])
     if (error) { console.error('Error kardex:', error); return { ok: false, msg: error.message } }
 

@@ -1,6 +1,6 @@
 import { siguienteConsecutivo } from '../utils/consecutivo'
 import React, { useState, useEffect } from 'react'
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 import { asientoFactura } from '../utils/asientosAuto'
 import { moverKardex } from '../utils/kardexAuto'
 import { imprimirConMembrete } from '../utils/membrete'
@@ -155,7 +155,8 @@ let error
                 fecha_salida: r.fecha_salida,
                 fecha_est_dev: r.fecha_est_dev,
                 estado: 'Refacturado',
-                refactura_id: res.data.id
+                refactura_id: res.data.id,
+                empresa_id: empresaActiva()
               }])
             }
           }

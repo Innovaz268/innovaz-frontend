@@ -1,4 +1,4 @@
-function Layout({ user, onLogout, moduloActivo, onModulo, children }) {
+function Layout({ user, empresa, esSuperUsuario, onLogout, moduloActivo, onModulo, children }) {
   const modulos = [
     { id: 'dashboard', label: '📊 Resumen' },
     { id: 'flujo', label: '⚙️ Flujo' },
@@ -16,7 +16,10 @@ function Layout({ user, onLogout, moduloActivo, onModulo, children }) {
   return (
     <div className="min-h-screen bg-[#f5f5f3]">
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <span className="text-lg font-bold text-[#185FA5]">⚙️ INNOVAZ ERP</span>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-bold text-[#185FA5]">{empresa?.nombre || 'ERP'}</span>
+          {esSuperUsuario && <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold">Super usuario</span>}
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500">{user?.email}</span>
           <button onClick={onLogout} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50">

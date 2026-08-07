@@ -20,15 +20,48 @@ function App() {
   const [error, setError] = useState('')
   const [user, setUser] = useState(null)
   const [modulo, setModulo] = useState('dashboard')
+  const [empresa, setEmpresa] = useState(null)
+  const [esSuperUsuario, setEsSuperUsuario] = useState(false)
+  const [cargandoEmpresa, setCargandoEmpresa] = useState(true)
 
   useEffect(() => {
+    let usuarioActual = null
     supabase.auth.getSession().then(({ data: { session } }) => {
+      usuarioActual = session?.user?.id ?? null
       setUser(session?.user ?? null)
+      if (session?.user) cargarEmpresa(session.user.id)
+      else setCargandoEmpresa(false)
     })
-    supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const nuevoId = session?.user?.id ?? null
+      // Solo actuar si el usuario REALMENTE cambió
+      if (nuevoId === usuarioActual) return
+      usuarioActual = nuevoId
       setUser(session?.user ?? null)
+      if (session?.user) cargarEmpresa(session.user.id)
+      else { setEmpresa(null); setEsSuperUsuario(false); setCargandoEmpresa(false) }
     })
+    return () => subscription.unsubscribe()
   }, [])
+
+  async function cargarEmpresa(userId) {
+    setCargandoEmpresa(true)
+    // ¿Es super usuario?
+    const { data: sup } = await supabase.from('super_usuarios').select('user_id').eq('user_id', userId).maybeSingle()
+    const esSuper = !!sup
+    setEsSuperUsuario(esSuper)
+    // Buscar la empresa del usuario
+    const { data: ue } = await supabase.from('usuarios_empresa').select('empresa_id').eq('user_id', userId).maybeSingle()
+    if (ue?.empresa_id) {
+      const { data: emp } = await supabase.from('empresas').select('*').eq('id', ue.empresa_id).maybeSingle()
+      setEmpresa(emp || null)
+    } else if (esSuper) {
+      // Super usuario sin empresa asignada: toma la primera (luego podrá elegir)
+      const { data: emp } = await supabase.from('empresas').select('*').order('created_at').limit(1).maybeSingle()
+      setEmpresa(emp || null)
+    }
+    setCargandoEmpresa(false)
+  }
 
   async function handleLogin() {
     setLoading(true)
@@ -43,8 +76,19 @@ function App() {
   }
 
   if (user) {
+    if (cargandoEmpresa) {
+      return <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">Cargando empresa...</div>
+    }
+    if (!empresa) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center">
+          <p className="text-gray-600 text-sm">Tu usuario no está asignado a ninguna empresa.</p>
+          <button onClick={handleLogout} className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg">Cerrar sesión</button>
+        </div>
+      )
+    }
     return (
-      <Layout user={user} onLogout={handleLogout} moduloActivo={modulo} onModulo={setModulo}>
+      <Layout user={user} empresa={empresa} esSuperUsuario={esSuperUsuario} onLogout={handleLogout} moduloActivo={modulo} onModulo={setModulo}>
         {modulo === 'dashboard'    && <Dashboard />}
         {modulo === 'clientes'     && <Clientes />}
         {modulo === 'equipos'      && <Equipos />}

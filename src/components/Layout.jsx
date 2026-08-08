@@ -1,4 +1,4 @@
-function Layout({ user, empresa, esSuperUsuario, onLogout, moduloActivo, onModulo, children }) {
+function Layout({ user, empresa, esSuperUsuario, listaEmpresas = [], onCambiarEmpresa, onLogout, moduloActivo, onModulo, children }) {
   const modulos = [
     { id: 'dashboard', label: '📊 Resumen' },
     { id: 'flujo', label: '⚙️ Flujo' },
@@ -11,13 +11,21 @@ function Layout({ user, empresa, esSuperUsuario, onLogout, moduloActivo, onModul
     { id: 'muebles', label: '🪵 Diseño' },
     { id: 'informes', label: '📊 Informes' },
     ...(user?.email === 'admin@innovaz.com' ? [{ id: 'supervisor', label: '🛠️ Supervisor' }] : []),
+    ...(esSuperUsuario ? [{ id: 'empresas', label: '🏢 Empresas' }] : []),
   ]
 
   return (
     <div className="min-h-screen bg-[#f5f5f3]">
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-[#185FA5]">{empresa?.nombre || 'ERP'}</span>
+          {esSuperUsuario && listaEmpresas.length > 0 ? (
+            <select value={empresa?.id || ''} onChange={e => onCambiarEmpresa(e.target.value)}
+              className="text-lg font-bold text-[#185FA5] border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#185FA5] bg-white">
+              {listaEmpresas.map(emp => <option key={emp.id} value={emp.id}>{emp.nombre}</option>)}
+            </select>
+          ) : (
+            <span className="text-lg font-bold text-[#185FA5]">{empresa?.nombre || 'ERP'}</span>
+          )}
           {esSuperUsuario && <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold">Super usuario</span>}
         </div>
         <div className="flex items-center gap-3">

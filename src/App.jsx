@@ -12,6 +12,7 @@ import Muebles from './modules/Muebles'
 import Contabilidad from './modules/Contabilidad'
 import Informes from './modules/Informes'
 import Supervisor from './modules/Supervisor'
+import Empresas from './modules/Empresas'
 
 function App() {
   const [email, setEmail] = useState('')
@@ -23,6 +24,7 @@ function App() {
   const [empresa, setEmpresa] = useState(null)
   const [esSuperUsuario, setEsSuperUsuario] = useState(false)
   const [cargandoEmpresa, setCargandoEmpresa] = useState(true)
+  const [listaEmpresas, setListaEmpresas] = useState([])
 
   useEffect(() => {
     let usuarioActual = null
@@ -50,6 +52,10 @@ function App() {
     const { data: sup } = await supabase.from('super_usuarios').select('user_id').eq('user_id', userId).maybeSingle()
     const esSuper = !!sup
     setEsSuperUsuario(esSuper)
+    if (esSuper) {
+      const { data: todas } = await supabase.from('empresas').select('*').order('nombre')
+      setListaEmpresas(todas || [])
+    }
     // Buscar la empresa del usuario
     const { data: ue } = await supabase.from('usuarios_empresa').select('empresa_id').eq('user_id', userId).maybeSingle()
     if (ue?.empresa_id) {
@@ -62,6 +68,13 @@ function App() {
       setEmpresa(emp || null)
     }
     setCargandoEmpresa(false)
+  }
+  async function cambiarEmpresa(empresaId) {
+    const emp = listaEmpresas.find(e => e.id === empresaId)
+    if (!emp) return
+    setEmpresa(emp)
+    localStorage.setItem('empresa_id', emp.id)
+    window.location.reload()
   }
 
   async function handleLogin() {
@@ -89,7 +102,7 @@ function App() {
       )
     }
     return (
-      <Layout user={user} empresa={empresa} esSuperUsuario={esSuperUsuario} onLogout={handleLogout} moduloActivo={modulo} onModulo={setModulo}>
+      <Layout user={user} empresa={empresa} esSuperUsuario={esSuperUsuario} listaEmpresas={listaEmpresas} onCambiarEmpresa={cambiarEmpresa} onLogout={handleLogout} moduloActivo={modulo} onModulo={setModulo}>
         {modulo === 'dashboard'    && <Dashboard />}
         {modulo === 'clientes'     && <Clientes />}
         {modulo === 'equipos'      && <Equipos />}
@@ -100,7 +113,7 @@ function App() {
         {modulo === 'muebles' && <Muebles />}
         {modulo === 'contabilidad' && <Contabilidad />}
         {modulo === 'informes' && <Informes />}
-        {modulo === 'supervisor' && <Supervisor />}
+        {modulo === 'empresas' && <Empresas />}
       </Layout>
     )
   }

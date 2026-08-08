@@ -1,0 +1,141 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../supabase'
+
+const INNOVAZ_ID = '198aab8f-f37d-456c-956a-5bf273c72cf0'
+
+function Empresas() {
+  const [empresas, setEmpresas] = useState([])
+  const [mostrarForm, setMostrarForm] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  const [mensaje, setMensaje] = useState('')
+  const [form, setForm] = useState({
+    nombre: '', eslogan: '', nit: '', telefonos: '', direccion: '', logo_url: '', color: '#185FA5'
+  })
+
+  useEffect(() => { cargar() }, [])
+
+  async function cargar() {
+    const { data } = await supabase.from('empresas').select('*').order('nombre')
+    setEmpresas(data || [])
+  }
+
+  async function crearEmpresa() {
+    if (!form.nombre.trim()) { setMensaje('El nombre es obligatorio'); return }
+    setGuardando(true)
+    setMensaje('')
+    // 1. Crear la empresa
+    const { data: nueva, error } = await supabase.from('empresas').insert([form]).select().single()
+    if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
+
+    // 2. Copiar el catálogo de cuentas base (el de INNOVAZ) a la nueva empresa
+    const { data: cuentasBase } = await supabase.from('puc_cuentas').select('*').eq('empresa_id', INNOVAZ_ID)
+    if (cuentasBase && cuentasBase.length > 0) {
+      const copia = cuentasBase.map(c => {
+        const { id, created_at, ...resto } = c
+        return { ...resto, empresa_id: nueva.id }
+      })
+      await supabase.from('puc_cuentas').insert(copia)
+    }
+
+    setMensaje('✓ Empresa creada: ' + nueva.nombre + ' (con catálogo de cuentas)')
+    setForm({ nombre: '', eslogan: '', nit: '', telefonos: '', direccion: '', logo_url: '', color: '#185FA5' })
+    setMostrarForm(false)
+    await cargar()
+    setGuardando(false)
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-4 mt-2">
+        <div>
+          <h2 className="text-xl font-bold text-[#185FA5]">🏢 Empresas</h2>
+          <p className="text-xs text-gray-400">Administración de empresas del sistema</p>
+        </div>
+        <button onClick={() => { setMostrarForm(!mostrarForm); setMensaje('') }}
+          className="px-4 py-2 bg-gradient-to-r from-[#185FA5] to-[#5B21B6] text-white text-xs font-bold rounded-lg hover:opacity-90">
+          {mostrarForm ? 'Cancelar' : '+ Nueva empresa'}
+        </button>
+      </div>
+
+      {mensaje && (
+        <div className={`mb-3 p-3 rounded-lg text-sm font-semibold ${mensaje.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+          {mensaje}
+        </div>
+      )}
+
+      {mostrarForm && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+          <h3 className="text-sm font-bold text-gray-700 mb-3">Nueva empresa</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Nombre *</label>
+              <input value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Eslogan</label>
+              <input value={form.eslogan} onChange={e => setForm({...form, eslogan: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">NIT / Cédula jurídica</label>
+              <input value={form.nit} onChange={e => setForm({...form, nit: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Teléfonos</label>
+              <input value={form.telefonos} onChange={e => setForm({...form, telefonos: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Dirección</label>
+              <input value={form.direccion} onChange={e => setForm({...form, direccion: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">URL del logo</label>
+              <input value={form.logo_url} onChange={e => setForm({...form, logo_url: e.target.value})}
+                placeholder="https://..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Color de acento</label>
+              <input type="color" value={form.color} onChange={e => setForm({...form, color: e.target.value})}
+                className="w-full h-10 px-1 py-1 border border-gray-200 rounded-lg" />
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button onClick={crearEmpresa} disabled={guardando}
+              className="px-6 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90 disabled:opacity-50">
+              {guardando ? 'Creando...' : 'Crear empresa'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Al crear, se le copia el catálogo de cuentas NIIF base para que arranque lista.</p>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Empresa</th>
+              <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">NIT</th>
+              <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Teléfonos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {empresas.map(e => (
+              <tr key={e.id} className="border-t border-gray-50">
+                <td className="px-4 py-2 font-semibold text-xs">{e.nombre}</td>
+                <td className="px-4 py-2 text-xs text-gray-500">{e.nit || '—'}</td>
+                <td className="px-4 py-2 text-xs text-gray-500">{e.telefonos || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+export default Empresas

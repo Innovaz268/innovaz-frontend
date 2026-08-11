@@ -1,15 +1,27 @@
 function Layout({ user, empresa, esSuperUsuario, listaEmpresas = [], onCambiarEmpresa, onLogout, moduloActivo, onModulo, children }) {
+  const mods = empresa?.modulos || []
+  const tieneAlquiler = mods.includes('alquiler')
+  const tieneMuebles = mods.includes('muebles')
+
   const modulos = [
+    // Permanentes
     { id: 'dashboard', label: '📊 Resumen' },
-    { id: 'flujo', label: '⚙️ Flujo' },
-    { id: 'contratos', label: '📄 Facturas' },
-    { id: 'cotizaciones', label: '📝 Cotizaciones' },
+    // Flujo: aparece si tiene alguna línea de negocio
+    ...(tieneAlquiler || tieneMuebles ? [{ id: 'flujo', label: '⚙️ Flujo' }] : []),
+    // Módulo Alquiler
+    ...(tieneAlquiler ? [
+      { id: 'contratos', label: '📄 Facturas' },
+      { id: 'cotizaciones', label: '📝 Cotizaciones' },
+      { id: 'equipos', label: '🔧 Equipos' },
+    ] : []),
+    // Módulo Muebles
+    ...(tieneMuebles ? [{ id: 'muebles', label: '🪵 Diseño' }] : []),
+    // Permanentes contables
     { id: 'caja', label: '💳 Caja' },
-    { id: 'equipos', label: '🔧 Equipos' },
     { id: 'clientes', label: '👥 Clientes' },
     { id: 'contabilidad', label: '📒 Contabilidad' },
-    { id: 'muebles', label: '🪵 Diseño' },
     { id: 'informes', label: '📊 Informes' },
+    // Administración
     ...(user?.email === 'admin@innovaz.com' ? [{ id: 'supervisor', label: '🛠️ Supervisor' }] : []),
     ...(esSuperUsuario ? [{ id: 'empresas', label: '🏢 Empresas' }] : []),
   ]

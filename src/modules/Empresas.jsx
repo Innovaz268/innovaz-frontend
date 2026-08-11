@@ -43,6 +43,15 @@ function Empresas() {
     await cargar()
     setGuardando(false)
   }
+  async function toggleModulo(empresa, modulo) {
+    const actuales = empresa.modulos || []
+    const nuevos = actuales.includes(modulo)
+      ? actuales.filter(m => m !== modulo)
+      : [...actuales, modulo]
+    const { error } = await supabase.from('empresas').update({ modulos: nuevos }).eq('id', empresa.id)
+    if (error) { setMensaje('Error: ' + error.message); return }
+    await cargar()
+  }
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -120,7 +129,7 @@ function Empresas() {
             <tr>
               <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Empresa</th>
               <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">NIT</th>
-              <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Teléfonos</th>
+              <th className="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Módulos activos</th>
             </tr>
           </thead>
           <tbody>
@@ -128,7 +137,20 @@ function Empresas() {
               <tr key={e.id} className="border-t border-gray-50">
                 <td className="px-4 py-2 font-semibold text-xs">{e.nombre}</td>
                 <td className="px-4 py-2 text-xs text-gray-500">{e.nit || '—'}</td>
-                <td className="px-4 py-2 text-xs text-gray-500">{e.telefonos || '—'}</td>
+                <td className="px-4 py-2">
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-1 text-xs cursor-pointer">
+                      <input type="checkbox" checked={(e.modulos || []).includes('alquiler')}
+                        onChange={() => toggleModulo(e, 'alquiler')} />
+                      🔧 Alquiler
+                    </label>
+                    <label className="flex items-center gap-1 text-xs cursor-pointer">
+                      <input type="checkbox" checked={(e.modulos || []).includes('muebles')}
+                        onChange={() => toggleModulo(e, 'muebles')} />
+                      🪵 Muebles
+                    </label>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

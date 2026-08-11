@@ -122,15 +122,15 @@ function App() {
       <Layout user={user} empresa={empresa} esSuperUsuario={esSuperUsuario} listaEmpresas={listaEmpresas} onCambiarEmpresa={cambiarEmpresa} onLogout={handleLogout} moduloActivo={modulo} onModulo={setModulo}>
         {modulo === 'dashboard'    && <Dashboard />}
         {modulo === 'clientes'     && <Clientes />}
-        {modulo === 'equipos'      && <Equipos />}
-        {modulo === 'flujo' && <Flujo />}
-        {modulo === 'contratos' && <Facturas />}
-        {modulo === 'cotizaciones' && <Cotizaciones />}
         {modulo === 'caja' && <Caja />}
-        {modulo === 'muebles' && <Muebles />}
         {modulo === 'contabilidad' && <Contabilidad />}
         {modulo === 'informes' && <Informes />}
         {modulo === 'empresas' && <Empresas />}
+        {modulo === 'flujo' && ((empresa?.modulos || []).includes('alquiler') || (empresa?.modulos || []).includes('muebles')) && <Flujo />}
+        {modulo === 'equipos'      && (empresa?.modulos || []).includes('alquiler') && <Equipos />}
+        {modulo === 'contratos' && (empresa?.modulos || []).includes('alquiler') && <Facturas />}
+        {modulo === 'cotizaciones' && (empresa?.modulos || []).includes('alquiler') && <Cotizaciones />}
+        {modulo === 'muebles' && (empresa?.modulos || []).includes('muebles') && <Muebles />}
       </Layout>
     )
   }

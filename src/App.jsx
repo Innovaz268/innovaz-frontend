@@ -55,6 +55,17 @@ function App() {
     if (esSuper) {
       const { data: todas } = await supabase.from('empresas').select('*').order('nombre')
       setListaEmpresas(todas || [])
+      // La empresa activa del super usuario viene de super_empresa_activa (la que usa la RLS)
+      const { data: activa } = await supabase.from('super_empresa_activa').select('empresa_id').eq('user_id', userId).maybeSingle()
+      if (activa?.empresa_id) {
+        const empActiva = (todas || []).find(e => e.id === activa.empresa_id)
+        if (empActiva) {
+          setEmpresa(empActiva)
+          localStorage.setItem('empresa_id', empActiva.id)
+          setCargandoEmpresa(false)
+          return
+        }
+      }
     }
     // Buscar la empresa del usuario
     const { data: ue } = await supabase.from('usuarios_empresa').select('empresa_id').eq('user_id', userId).maybeSingle()
@@ -72,8 +83,14 @@ function App() {
   async function cambiarEmpresa(empresaId) {
     const emp = listaEmpresas.find(e => e.id === empresaId)
     if (!emp) return
-    setEmpresa(emp)
+    // Si es super usuario, actualizar su empresa activa (para la RLS) ANTES de recargar
+    if (esSuperUsuario) {
+      const { error } = await supabase.from('super_empresa_activa').upsert({ user_id: user.id, empresa_id: empresaId }, { onConflict: 'user_id' })
+      if (error) { alert('Error cambiando de empresa: ' + error.message); return }
+    }
     localStorage.setItem('empresa_id', emp.id)
+    // Pequeña espera para asegurar que la base registró el cambio antes de recargar
+    await new Promise(r => setTimeout(r, 300))
     window.location.reload()
   }
 

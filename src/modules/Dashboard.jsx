@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
-function Dashboard() {
+function Dashboard({ color = '#185FA5' }) {
   const [contratos, setContratos] = useState([])
   const [caja, setCaja] = useState([])
   const [terceros, setTerceros] = useState([])
   const [lineas, setLineas] = useState([])
-  const [vista, setVista] = useState('facturas')
+  const [vista, setVista] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -63,7 +63,10 @@ function Dashboard() {
       <div className="grid grid-cols-2 gap-3 mb-6 mt-2">
         {tarjetas.map(m => (
           <div key={m.id} onClick={() => setVista(m.id)}
-            className={`bg-white rounded-xl p-4 border shadow-sm cursor-pointer transition ${vista === m.id ? 'border-[#185FA5] ring-1 ring-[#185FA5]' : 'border-gray-100 hover:border-gray-300'}`}>
+            onMouseEnter={ev => ev.currentTarget.style.backgroundColor = color + '0d'}
+            onMouseLeave={ev => ev.currentTarget.style.backgroundColor = vista === m.id ? color + '0d' : '#ffffff'}
+            style={{ backgroundColor: vista === m.id ? color + '0d' : '#ffffff', ...(vista === m.id ? { boxShadow: `0 0 0 1.5px ${color}66` } : {}) }}
+            className="rounded-2xl p-5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 shadow-sm">
             <p className="text-xs text-gray-400 mb-1">{m.label}</p>
             <p className={`text-2xl font-bold ${m.color}`}>{m.valor}</p>
           </div>

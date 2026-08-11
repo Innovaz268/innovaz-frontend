@@ -120,7 +120,7 @@ function App() {
     }
     return (
       <Layout user={user} empresa={empresa} esSuperUsuario={esSuperUsuario} listaEmpresas={listaEmpresas} onCambiarEmpresa={cambiarEmpresa} onLogout={handleLogout} moduloActivo={modulo} onModulo={setModulo}>
-        {modulo === 'dashboard'    && <Dashboard />}
+        {modulo === 'dashboard'    && <Dashboard color={empresa?.color || '#185FA5'} />}
         {modulo === 'clientes'     && <Clientes />}
         {modulo === 'caja' && <Caja />}
         {modulo === 'contabilidad' && <Contabilidad />}

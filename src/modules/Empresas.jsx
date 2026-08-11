@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 const INNOVAZ_ID = '198aab8f-f37d-456c-956a-5bf273c72cf0'
 
 function Empresas() {
+  const [editandoId, setEditandoId] = useState(null)
   const [empresas, setEmpresas] = useState([])
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -23,6 +24,20 @@ function Empresas() {
     if (!form.nombre.trim()) { setMensaje('El nombre es obligatorio'); return }
     setGuardando(true)
     setMensaje('')
+
+    // Si estamos editando, actualizar y salir
+    if (editandoId) {
+      const { error: errUpd } = await supabase.from('empresas').update(form).eq('id', editandoId)
+      if (errUpd) { setMensaje('Error: ' + errUpd.message); setGuardando(false); return }
+      setMensaje('✓ Empresa actualizada')
+      setForm({ nombre: '', eslogan: '', nit: '', telefonos: '', direccion: '', logo_url: '', color: '#185FA5' })
+      setMostrarForm(false)
+      setEditandoId(null)
+      await cargar()
+      setGuardando(false)
+      return
+    }
+
     // 1. Crear la empresa
     const { data: nueva, error } = await supabase.from('empresas').insert([form]).select().single()
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
@@ -51,6 +66,16 @@ function Empresas() {
     const { error } = await supabase.from('empresas').update({ modulos: nuevos }).eq('id', empresa.id)
     if (error) { setMensaje('Error: ' + error.message); return }
     await cargar()
+  }
+  function abrirEditar(e) {
+    setEditandoId(e.id)
+    setForm({
+      nombre: e.nombre || '', eslogan: e.eslogan || '', nit: e.nit || '',
+      telefonos: e.telefonos || '', direccion: e.direccion || '',
+      logo_url: e.logo_url || '', color: e.color || '#185FA5'
+    })
+    setMostrarForm(true)
+    setMensaje('')
   }
 
   return (
@@ -135,7 +160,10 @@ function Empresas() {
           <tbody>
             {empresas.map(e => (
               <tr key={e.id} className="border-t border-gray-50">
-                <td className="px-4 py-2 font-semibold text-xs">{e.nombre}</td>
+                <td className="px-4 py-2 font-semibold text-xs">
+                  {e.nombre}
+                  <button onClick={() => abrirEditar(e)} className="ml-2 text-xs text-blue-400 hover:text-blue-600 font-normal">✏️ editar</button>
+                </td>
                 <td className="px-4 py-2 text-xs text-gray-500">{e.nit || '—'}</td>
                 <td className="px-4 py-2">
                   <div className="flex gap-3">

@@ -186,13 +186,13 @@ function Contabilidad() {
         <div>
           <div className="flex justify-end mb-3">
             <button onClick={() => { setMostrarFormAsiento(!mostrarFormAsiento); setMensaje('') }}
-              className="px-4 py-2 bg-gradient-to-r from-[#185FA5] to-[#5B21B6] text-white text-xs font-bold rounded-lg hover:opacity-90">
+              className="px-4 py-2 btn-empresa text-white text-xs font-bold rounded-lg hover:opacity-90">
               {mostrarFormAsiento ? 'Cancelar' : '+ Nuevo Asiento'}
             </button>
           </div>
 
           {mostrarFormAsiento && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+            <div className="card p-4 mb-4">
               <h3 className="text-sm font-bold text-gray-700 mb-3">Nuevo Asiento Contable</h3>
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div>
@@ -284,7 +284,7 @@ function Contabilidad() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="card overflow-hidden">
             {loading ? (
               <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
             ) : asientos.length === 0 ? (
@@ -334,13 +334,13 @@ function Contabilidad() {
               className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5] bg-white"
               placeholder="Buscar por codigo o nombre..." />
             <button onClick={() => { setMostrarFormPuc(!mostrarFormPuc); setMensaje('') }}
-              className="px-4 py-2 bg-gradient-to-r from-[#185FA5] to-[#5B21B6] text-white text-xs font-bold rounded-lg hover:opacity-90">
+              className="px-4 py-2 btn-empresa text-white text-xs font-bold rounded-lg hover:opacity-90">
               {mostrarFormPuc ? 'Cancelar' : '+ Nueva cuenta'}
             </button>
           </div>
 
           {mostrarFormPuc && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+            <div className="card p-4 mb-4">
               <h3 className="text-sm font-bold text-gray-700 mb-3">Nueva cuenta PUC</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -404,7 +404,7 @@ function Contabilidad() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="card overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
@@ -451,13 +451,13 @@ function Contabilidad() {
         <div>
           <div className="flex justify-end mb-3">
             <button onClick={() => { setMostrarFormKardex(!mostrarFormKardex); setMensaje('') }}
-              className="px-4 py-2 bg-gradient-to-r from-[#185FA5] to-[#5B21B6] text-white text-xs font-bold rounded-lg hover:opacity-90">
+              className="px-4 py-2 btn-empresa text-white text-xs font-bold rounded-lg hover:opacity-90">
               {mostrarFormKardex ? 'Cancelar' : '+ Movimiento'}
             </button>
           </div>
 
           {mostrarFormKardex && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+            <div className="card p-4 mb-4">
               <h3 className="text-sm font-bold text-gray-700 mb-3">Nuevo movimiento de inventario</h3>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -505,7 +505,7 @@ function Contabilidad() {
           )}
 
           {/* Selector de equipo */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+          <div className="card p-4 mb-4">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Seleccione un equipo para ver su kardex</label>
             <select value={equipoKardex} onChange={e => setEquipoKardex(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
@@ -558,7 +558,7 @@ function Contabilidad() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="card overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-100">
                       <span className="text-sm font-bold text-gray-700">Kardex de {eq?.nombre}</span>
                     </div>

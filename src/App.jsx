@@ -62,6 +62,7 @@ function App() {
         if (empActiva) {
           setEmpresa(empActiva)
           localStorage.setItem('empresa_id', empActiva.id)
+          document.documentElement.style.setProperty('--color-empresa', empActiva.color || '#185FA5')
           setCargandoEmpresa(false)
           return
         }
@@ -72,7 +73,10 @@ function App() {
     if (ue?.empresa_id) {
       const { data: emp } = await supabase.from('empresas').select('*').eq('id', ue.empresa_id).maybeSingle()
       setEmpresa(emp || null)
-      if (emp) localStorage.setItem('empresa_id', emp.id)
+      if (emp) {
+        localStorage.setItem('empresa_id', emp.id)
+        document.documentElement.style.setProperty('--color-empresa', emp.color || '#185FA5')
+      }
     } else if (esSuper) {
       // Super usuario sin empresa asignada: toma la primera (luego podrá elegir)
       const { data: emp } = await supabase.from('empresas').select('*').order('created_at').limit(1).maybeSingle()
@@ -160,7 +164,7 @@ function App() {
             className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
         </div>
         <button onClick={handleLogin} disabled={loading}
-          className="w-full py-3 bg-gradient-to-r from-[#185FA5] to-[#5B21B6] text-white font-bold rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+          className="w-full py-3 btn-empresa text-white font-bold rounded-lg text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
           {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
         </button>
       </div>

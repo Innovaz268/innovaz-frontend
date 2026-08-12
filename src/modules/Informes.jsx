@@ -355,7 +355,7 @@ function Informes() {
           ⬇ Exportar Excel
         </button>
       </div>
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end">
+      <div className="card p-3 mb-4 flex gap-3 items-end">
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Desde</label>
           <input type="date" value={desde} onChange={e => setDesde(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
@@ -369,7 +369,7 @@ function Informes() {
       {loading ? (
         <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="card overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
             <span className="text-sm font-bold text-gray-700">Del {desde} al {hasta}</span>
           </div>
@@ -407,7 +407,7 @@ function Informes() {
 
       {informe === 'cartera' && (
         <>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end justify-between">
+        <div className="card p-3 mb-4 flex gap-3 items-end justify-between">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Corte a la fecha</label>
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
@@ -425,9 +425,9 @@ function Informes() {
         {loading ? (
           <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
         ) : carteraPorCliente.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">No hay cartera pendiente al corte</div>
+          <div className="card p-8 text-center text-gray-300 text-sm">No hay cartera pendiente al corte</div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
               <span className="text-sm font-bold text-gray-700">Cartera al {hasta}</span>
             </div>
@@ -460,7 +460,7 @@ function Informes() {
 
       {informe === 'balance' && (
         <>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end justify-between">
+        <div className="card p-3 mb-4 flex gap-3 items-end justify-between">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Corte a la fecha</label>
             <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
@@ -478,7 +478,7 @@ function Informes() {
         {loading ? (
           <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
               <span className="text-sm font-bold text-gray-700">Estado de Situación Financiera al {hasta}</span>
             </div>
@@ -533,7 +533,7 @@ function Informes() {
 
       {informe === 'auxiliar' && (
         <>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end flex-wrap">
+        <div className="card p-3 mb-4 flex gap-3 items-end flex-wrap">
           <div className="flex-1 min-w-[180px]">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Cuenta (opcional)</label>
             <select value={cuentaAux} onChange={e => setCuentaAux(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
@@ -571,11 +571,11 @@ function Informes() {
         </div>
 
         {!cuentaAux && !nitAux.trim() ? (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Seleccione una cuenta o digite un NIT para ver los movimientos</div>
+          <div className="card p-8 text-center text-gray-300 text-sm">Seleccione una cuenta o digite un NIT para ver los movimientos</div>
         ) : movimientosAux.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Sin movimientos en el periodo</div>
+          <div className="card p-8 text-center text-gray-300 text-sm">Sin movimientos en el periodo</div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
               <span className="text-sm font-bold text-gray-700">
                 {cuentaAux ? `${cuentaAux} · ${cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre}` : 'Todas las cuentas'}
@@ -624,7 +624,7 @@ function Informes() {
 
       {informe === 'terceros' && (
         <>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex gap-3 items-end flex-wrap">
+        <div className="card p-3 mb-4 flex gap-3 items-end flex-wrap">
           <div className="flex-1 min-w-[200px]">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Cuenta</label>
             <select value={cuentaAux} onChange={e => setCuentaAux(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
@@ -647,11 +647,11 @@ function Informes() {
         </div>
 
         {!cuentaAux ? (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Seleccione una cuenta para ver sus saldos por tercero</div>
+          <div className="card p-8 text-center text-gray-300 text-sm">Seleccione una cuenta para ver sus saldos por tercero</div>
         ) : saldosPorTercero.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center text-gray-300 text-sm">Sin saldos en esta cuenta al corte</div>
+          <div className="card p-8 text-center text-gray-300 text-sm">Sin saldos en esta cuenta al corte</div>
         ) : (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
               <span className="text-sm font-bold text-gray-700">{cuentaAux} · {cuentasConMovimiento.find(c => c.codigo === cuentaAux)?.nombre} — saldos al {hasta}</span>
             </div>

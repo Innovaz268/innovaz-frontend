@@ -89,7 +89,7 @@ function Equipos() {
       <div className="flex items-center justify-between mb-4 mt-2">
         <h2 className="text-xl font-bold text-[#185FA5]">🔧 Equipos y Maquinaria</h2>
         <button onClick={mostrarForm ? () => setMostrarForm(false) : abrirNuevo}
-          className="px-4 py-2 bg-gradient-to-r from-[#185FA5] to-[#5B21B6] text-white text-xs font-bold rounded-lg hover:opacity-90">
+          className="px-4 py-2 btn-empresa text-white text-xs font-bold rounded-lg hover:opacity-90">
           {mostrarForm ? '✕ Cancelar' : '+ Nuevo'}
         </button>
       </div>
@@ -101,7 +101,7 @@ function Equipos() {
       )}
 
       {mostrarForm && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+        <div className="card p-4 mb-4">
           <h3 className="text-sm font-bold text-gray-700 mb-3">
             {editandoId ? '✏️ Editar equipo' : 'Nuevo equipo'}
           </h3>
@@ -184,7 +184,7 @@ function Equipos() {
           placeholder="🔍 Buscar por nombre o categoría..." />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
         ) : filtrados.length === 0 ? (

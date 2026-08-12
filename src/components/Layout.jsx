@@ -50,16 +50,19 @@ function Layout({ user, empresa, esSuperUsuario, listaEmpresas = [], onCambiarEm
       </div>
 
       <div className="bg-white border-b border-gray-200 px-4 flex gap-1 overflow-x-auto">
-        {modulos.map(mod => (
-          <button key={mod.id} onClick={() => onModulo(mod.id)}
-            className={`px-3 py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors
-              ${moduloActivo === mod.id
-                ? 'text-[#185FA5] border-[#185FA5]'
-                : 'text-gray-500 border-transparent hover:text-[#185FA5] hover:border-[#185FA5]'
-              }`}>
-            {mod.label}
-          </button>
-        ))}
+        {modulos.map(mod => {
+          const activo = moduloActivo === mod.id
+          return (
+            <button key={mod.id} onClick={() => onModulo(mod.id)}
+              onMouseEnter={ev => { if (!activo) ev.currentTarget.style.color = empresa?.color || '#185FA5' }}
+              onMouseLeave={ev => { if (!activo) ev.currentTarget.style.color = '' }}
+              style={activo ? { color: empresa?.color || '#185FA5', borderColor: empresa?.color || '#185FA5' } : {}}
+              className={`px-3 py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors
+                ${activo ? '' : 'text-gray-500 border-transparent'}`}>
+              {mod.label}
+            </button>
+          )
+        })}
       </div>
 
       <div className="p-4">

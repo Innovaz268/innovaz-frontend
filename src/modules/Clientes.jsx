@@ -73,7 +73,8 @@ function Clientes() {
       <div className="flex items-center justify-between mb-4 mt-2">
         <h2 className="text-xl font-bold text-[#185FA5]">👥 Clientes y Terceros</h2>
         <button onClick={mostrarForm ? () => setMostrarForm(false) : abrirNuevo}
-          className="px-4 py-2 bg-gradient-to-r from-[#185FA5] to-[#5B21B6] text-white text-xs font-bold rounded-lg hover:opacity-90">
+          style={{ background: `linear-gradient(to right, var(--color-empresa, #185FA5), color-mix(in srgb, var(--color-empresa, #185FA5) 70%, black))` }}
+          className="px-4 py-2 text-white text-xs font-bold rounded-lg hover:opacity-90">
           {mostrarForm ? '✕ Cancelar' : '+ Nuevo'}
         </button>
       </div>
@@ -85,7 +86,7 @@ function Clientes() {
       )}
 
       {mostrarForm && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+        <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
           <h3 className="text-sm font-bold text-gray-700 mb-3">
             {editandoId ? '✏️ Editar cliente / tercero' : 'Nuevo cliente / tercero'}
           </h3>
@@ -163,7 +164,7 @@ function Clientes() {
           placeholder="🔍 Buscar por nombre, NIT o teléfono..." />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
         ) : filtrados.length === 0 ? (

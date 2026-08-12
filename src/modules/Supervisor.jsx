@@ -85,7 +85,7 @@ function Supervisor() {
       </div>
 
       {GRUPOS.map(g => (
-        <div key={g.grupo} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+        <div key={g.grupo} className="card p-4 mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className={`text-sm font-bold ${g.color}`}>{g.grupo}</span>
             {g.grupo === 'Movimientos' && (
@@ -102,7 +102,7 @@ function Supervisor() {
         </div>
       ))}
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+      <div className="card p-4 mb-4">
         <label className="flex items-center gap-2 py-1.5 cursor-pointer">
           <input type="checkbox" checked={reiniciarConsec} onChange={e => setReiniciarConsec(e.target.checked)} />
           <span className="text-sm text-gray-700">Reiniciar consecutivos a 0 (FC, RC, CM, CO, CE, etc.)</span>

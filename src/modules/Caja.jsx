@@ -126,7 +126,7 @@ function Caja() {
       <div className="flex items-center justify-between mb-4 mt-2">
         <h2 className="text-xl font-bold text-[#185FA5]">💳 Caja — Registro de Pagos</h2>
         <button onClick={() => { setMostrarForm(!mostrarForm); setMensaje('') }}
-          className="px-4 py-2 bg-gradient-to-r from-[#185FA5] to-[#5B21B6] text-white text-xs font-bold rounded-lg hover:opacity-90">
+          className="px-4 py-2 btn-empresa text-white text-xs font-bold rounded-lg hover:opacity-90">
           {mostrarForm ? '✕ Cancelar' : '+ Registrar pago'}
         </button>
       </div>
@@ -155,7 +155,7 @@ function Caja() {
 
       {/* Formulario */}
       {mostrarForm && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+        <div className="card p-4 mb-4">
           <h3 className="text-sm font-bold text-gray-700 mb-3">Registrar nuevo pago</h3>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
@@ -228,7 +228,7 @@ function Caja() {
       )}
 
       {/* Lista de pagos */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
           <span className="text-sm font-bold text-gray-700">📋 Historial de pagos</span>
         </div>

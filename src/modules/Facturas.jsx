@@ -102,7 +102,7 @@ let error
       error = res.error
     } else {
       codigo = await siguienteConsecutivo('FC')
-      const datos2 = { ...datos, id_doc: codigo }
+      const datos2 = { ...datos, id_doc: codigo, empresa_id: empresaActiva() }
       const res = await supabase.from('contratos').insert([datos2]).select().single()
       error = res.error
       if (!error && res.data) {
@@ -116,7 +116,8 @@ let error
           subtotal: parseFloat(it.subtotal) || 0,
           fecha_salida: form.fecha_salida || null,
           fecha_est_dev: form.fecha_est_dev || null,
-          estado: 'En obra'
+          estado: 'En obra',
+          empresa_id: empresaActiva()
         }))
         if (lineas.length > 0) await supabase.from('alquiler_lineas').insert(lineas)
           if (refacturando.length === 0) {

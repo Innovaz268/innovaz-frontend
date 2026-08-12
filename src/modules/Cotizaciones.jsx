@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabase'
+import { supabase, empresaActiva } from '../supabase'
 import { siguienteConsecutivo } from '../utils/consecutivo'
 
 function Cotizaciones() {
@@ -81,7 +81,7 @@ function Cotizaciones() {
       error = res.error
     } else {
       const codigo = await siguienteConsecutivo('CQ')
-      const datos2 = { ...datos, id_doc: codigo }
+      const datos2 = { ...datos, id_doc: codigo, empresa_id: empresaActiva() }
       const res = await supabase.from('cotizaciones').insert([datos2])
       error = res.error
     }

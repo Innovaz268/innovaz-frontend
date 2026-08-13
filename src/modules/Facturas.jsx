@@ -91,6 +91,32 @@ function Facturas() {
   async function guardarFactura() {
     if (!form.cliente_id) { setMensaje('Seleccione un cliente'); return }
     if (form.items.length === 0) { setMensaje('Agregue al menos un equipo'); return }
+
+    // Control de stock: detectar equipos facturados por encima de lo disponible
+    if (!editandoId) {
+      const excedidos = []
+      for (const it of form.items) {
+        if (it.equipo_id) {
+          const eq = equipos.find(e => e.id === it.equipo_id)
+          const disp = eq ? (eq.stock || 0) : 0
+          const pedida = parseFloat(it.cantidad) || 0
+          if (pedida > disp) {
+            excedidos.push(`${it.nombre}: pide ${pedida}, disponible ${disp}`)
+          }
+        }
+      }
+      if (excedidos.length > 0) {
+        // Exigir la observación (prestado por XXX)
+        if (!form.observaciones || !form.observaciones.trim()) {
+          setMensaje('⚠️ Está facturando más de lo disponible (' + excedidos.join(' · ') + '). Indique en Observaciones de quién es el equipo prestado (ej: "Prestado por Juan").')
+          return
+        }
+        // Confirmar que quiere continuar
+        if (!window.confirm('Atención: está facturando más de lo disponible:\n\n' + excedidos.join('\n') + '\n\nObservación: ' + form.observaciones + '\n\n¿Desea continuar?')) {
+          return
+        }
+      }
+    }
     setGuardando(true)
     setMensaje('')
     const datos = { ...form, total: totalFinal }
@@ -226,7 +252,7 @@ let error
 
     await cargarDatos()
   }
-  
+
   function imprimirFactura(c) {
     const trc = terceros.find(t => t.id === c.cliente_id)
     const equipos = lineas.filter(l => l.contrato_id === c.id)
@@ -393,10 +419,22 @@ let error
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
             </div>
             <div className="col-span-2">
-              <label className="block text-xs font-semibold text-gray-500 mb-1">📍 Ubicación / Lugar de entrega</label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">📍 Dirección de entrega</label>
               <input value={form.ubicacion} onChange={e => setForm({...form, ubicacion: e.target.value})}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
-                placeholder="Dirección de entrega" />
+                placeholder="A dónde se lleva el equipo" />
+              {form.cliente_id && (() => {
+                const dirCli = terceros.find(t => t.id === form.cliente_id)?.dir || ''
+                return dirCli ? (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Dirección del cliente: {dirCli}
+                    {form.ubicacion !== dirCli && (
+                      <button type="button" onClick={() => setForm({ ...form, ubicacion: dirCli })}
+                        className="ml-2 text-blue-400 hover:text-blue-600">usar esta</button>
+                    )}
+                  </p>
+                ) : null
+              })()}
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-semibold text-gray-500 mb-1">Observaciones</label>

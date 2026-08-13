@@ -542,7 +542,10 @@ function Contabilidad() {
                   <div className="grid grid-cols-4 gap-3 mb-4">
                     <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
                       <div className="text-xs text-gray-400">Stock actual</div>
-                      <div className={`text-2xl font-bold ${(eq?.stock || 0) > 0 ? 'text-[#27500A]' : 'text-red-600'}`}>{eq?.stock || 0}</div>
+                      <div className={`text-2xl font-bold ${(eq?.stock || 0) > 0 ? 'text-[#27500A]' : (eq?.stock || 0) < 0 ? 'text-amber-600' : 'text-red-600'}`}>{eq?.stock || 0}</div>
+                      {(eq?.stock || 0) < 0 && (
+                        <div className="text-xs text-amber-600 mt-0.5" title="Stock negativo: hay equipo prestado de terceros en alquiler. No es un error.">🔄 prestado</div>
+                      )}
                     </div>
                     <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
                       <div className="text-xs text-gray-400">Entradas</div>

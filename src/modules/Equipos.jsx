@@ -214,9 +214,14 @@ function Equipos() {
                   </td>
                   <td className="px-4 py-2 text-xs font-semibold text-[#185FA5]">{fmt(e.tarifa)}</td>
                   <td className="px-4 py-2 text-xs">
-                    <span className={`px-2 py-0.5 rounded-full font-semibold ${e.stock > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    <span className={`px-2 py-0.5 rounded-full font-semibold ${e.stock > 0 ? 'bg-green-50 text-green-700' : e.stock < 0 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
                       {e.stock || 0} uds
                     </span>
+                    {e.stock < 0 && (
+                      <span className="ml-1 text-amber-600" title="Stock negativo: hay equipo prestado de terceros en alquiler. No es un error.">
+                        🔄 prestado
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-xs text-gray-500">{fmt(e.costo_compra)}</td>
                   <td className="px-4 py-2 text-right flex gap-2 justify-end">

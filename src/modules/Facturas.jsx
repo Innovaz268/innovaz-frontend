@@ -33,7 +33,7 @@ function Facturas() {
     const [{ data: cts }, { data: trcs }, { data: eqs }, { data: lns }] = await Promise.all([
       supabase.from('contratos').select('*').order('created_at', { ascending: false }),
       supabase.from('terceros').select('id, nombre, dir').order('nombre'),
-      supabase.from('equipos').select('id, nombre, tarifa').order('nombre'),
+      supabase.from('equipos').select('id, nombre, tarifa, stock').order('nombre'),
       supabase.from('alquiler_lineas').select('*').order('created_at', { ascending: false }),
     ])
     setContratos(cts || [])
@@ -94,10 +94,11 @@ function Facturas() {
 
     // Control de stock: detectar equipos facturados por encima de lo disponible
     if (!editandoId) {
+      console.log('EQUIPOS EN MEMORIA:', equipos.map(e => ({ nombre: e.nombre, stock: e.stock })))
       const excedidos = []
       for (const it of form.items) {
         if (it.equipo_id) {
-          const eq = equipos.find(e => e.id === it.equipo_id)
+         const eq = equipos.find(e => e.id === it.equipo_id)
           const disp = eq ? (eq.stock || 0) : 0
           const pedida = parseFloat(it.cantidad) || 0
           if (pedida > disp) {

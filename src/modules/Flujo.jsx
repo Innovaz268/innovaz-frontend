@@ -44,6 +44,7 @@ function Flujo() {
 
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
   const fmtFecha = f => f ? f.split('-').reverse().join('/') : '—'
+  const numCM = cotizacionId => cotizaciones.find(c => c.id === cotizacionId)?.id_doc || null
 
   const nombreCliente = id => terceros.find(t => t.id === id)?.nombre || id || '—'
   const dirCliente = id => terceros.find(t => t.id === id)?.dir || ''
@@ -444,6 +445,9 @@ function Flujo() {
                   <div className="font-semibold text-xs text-gray-800">{nombreCliente(f.cliente_id)}</div>
                   <span className="text-xs font-bold text-[#27500A]">{f.id_doc || '—'}</span>
                 </div>
+                {numCM(f.cotizacion_id) && (
+                  <div className="text-xs text-gray-400 mt-0.5">Cotización: {numCM(f.cotizacion_id)}</div>
+                )}
                 <div className="text-xs text-gray-400 mt-1">{f.descripcion || '—'}</div>
                 <div className="text-xs font-bold text-[#27500A] mt-1">{fmt(f.total)}</div>
               </div>
@@ -469,6 +473,9 @@ function Flujo() {
                   <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
                   <span className="text-xs font-bold text-[#185FA5]">{o.id_doc || '—'}</span>
                 </div>
+                {numCM(o.cotizacion_id) && (
+                  <div className="text-xs text-gray-400 mt-0.5">Cotización: {numCM(o.cotizacion_id)}</div>
+                )}
                 <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
                 <div className="text-xs mt-1"><span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-semibold">{o.estado}</span></div>
               </div>
@@ -494,6 +501,9 @@ function Flujo() {
                   <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
                   <span className="text-xs font-bold text-green-700">{o.id_doc || '—'}</span>
                 </div>
+                {numCM(o.cotizacion_id) && (
+                  <div className="text-xs text-gray-400 mt-0.5">Cotización: {numCM(o.cotizacion_id)}</div>
+                )}
                 <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
                 <div className="text-xs font-bold text-green-700 mt-1">{fmt(o.total)}</div>
                 {dirCliente(o.cliente_id) && (
@@ -529,6 +539,9 @@ function Flujo() {
                     <div className="font-semibold text-xs text-gray-800">{nombreCliente(o.cliente_id)}</div>
                     <span className="text-xs font-bold text-[#EA580C]">{o.id_doc || '—'}</span>
                   </div>
+                  {numCM(o.cotizacion_id) && (
+                    <div className="text-xs text-gray-400 mt-0.5">Cotización: {numCM(o.cotizacion_id)}</div>
+                  )}
                   <div className="text-xs text-gray-400 mt-1">{o.descripcion || '—'}</div>
                   <div className={`text-xs font-bold mt-1 ${saldo > 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {saldo > 0 ? `💰 Saldo ${fmt(saldo)}` : '✓ Pagado'}

@@ -100,8 +100,57 @@ async function cargarDatos() {
   }
 
   async function eliminarCotizacion(id) {
-    if (!window.confirm('Eliminar esta cotizacion?')) return
+    if (!window.confirm('¿Eliminar esta cotización? Se borrarán también su factura, orden, costos y todos los asientos contables generados. Esta acción no se puede deshacer.')) return
+
+    // 1. Traer las órdenes de esta cotización (para borrar sus costos y asientos de costos)
+    const { data: ordenes } = await supabase.from('muebles_ordenes').select('id, asiento_costos').eq('cotizacion_id', id)
+    for (const o of (ordenes || [])) {
+      // Borrar asiento de costos de la orden (si existe)
+      if (o.asiento_costos) {
+        const { data: asC } = await supabase.from('asientos_contables').select('id').eq('documento_id', o.asiento_costos)
+        for (const a of (asC || [])) {
+          await supabase.from('asientos_lineas').delete().eq('asiento_id', a.id)
+          await supabase.from('asientos_contables').delete().eq('id', a.id)
+        }
+      }
+      // Borrar los costos de la orden
+      await supabase.from('muebles_costos').delete().eq('orden_id', o.id)
+    }
+
+    // 2. Borrar las órdenes de la cotización
+    await supabase.from('muebles_ordenes').delete().eq('cotizacion_id', id)
+
+    // 3. Traer las facturas de muebles de esta cotización (para borrar su asiento del abono y sus pagos)
+    const { data: facturas } = await supabase.from('muebles_facturas').select('id, id_doc').eq('cotizacion_id', id)
+    for (const f of (facturas || [])) {
+      // Borrar el asiento del abono de la factura (documento_id = id_doc, ej FM-...)
+      if (f.id_doc) {
+        const { data: asF } = await supabase.from('asientos_contables').select('id').eq('documento_id', f.id_doc)
+        for (const a of (asF || [])) {
+          await supabase.from('asientos_lineas').delete().eq('asiento_id', a.id)
+          await supabase.from('asientos_contables').delete().eq('id', a.id)
+        }
+      }
+      // Borrar los pagos de caja de esta factura de muebles + sus asientos
+      const { data: pagos } = await supabase.from('caja').select('id_doc').eq('muebles_factura_id', f.id)
+      for (const p of (pagos || [])) {
+        if (p.id_doc) {
+          const { data: asP } = await supabase.from('asientos_contables').select('id').eq('documento_id', p.id_doc)
+          for (const a of (asP || [])) {
+            await supabase.from('asientos_lineas').delete().eq('asiento_id', a.id)
+            await supabase.from('asientos_contables').delete().eq('id', a.id)
+          }
+        }
+      }
+      await supabase.from('caja').delete().eq('muebles_factura_id', f.id)
+    }
+
+    // 4. Borrar las facturas de muebles
+    await supabase.from('muebles_facturas').delete().eq('cotizacion_id', id)
+
+    // 5. Borrar la cotización
     await supabase.from('muebles_cotizaciones').delete().eq('id', id)
+
     await cargarDatos()
   }
 
@@ -187,8 +236,26 @@ async function cargarDatos() {
   }
 
   async function eliminarOrden(id) {
-    if (!window.confirm('Eliminar esta orden?')) return
+    if (!window.confirm('¿Eliminar esta orden? Se borrarán también sus costos y el asiento de costos. Esta acción no se puede deshacer.')) return
+
+    // 1. Traer la orden para su asiento de costos
+    const { data: orden } = await supabase.from('muebles_ordenes').select('asiento_costos').eq('id', id).single()
+
+    // 2. Borrar el asiento de costos si existe (documento_id = asiento_costos, ej CO-...)
+    if (orden?.asiento_costos) {
+      const { data: asientos } = await supabase.from('asientos_contables').select('id').eq('documento_id', orden.asiento_costos)
+      for (const a of (asientos || [])) {
+        await supabase.from('asientos_lineas').delete().eq('asiento_id', a.id)
+        await supabase.from('asientos_contables').delete().eq('id', a.id)
+      }
+    }
+
+    // 3. Borrar los costos de la orden
+    await supabase.from('muebles_costos').delete().eq('orden_id', id)
+
+    // 4. Borrar la orden
     await supabase.from('muebles_ordenes').delete().eq('id', id)
+
     await cargarDatos()
   }
   const costosDeOrden = ordenId => costos.filter(c => c.orden_id === ordenId)

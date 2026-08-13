@@ -95,8 +95,23 @@ function Caja() {
   }
 
   async function eliminarPago(id) {
-    if (!window.confirm('¿Eliminar este pago?')) return
+    if (!window.confirm('¿Eliminar este pago? Se borrará también su asiento contable. Esta acción no se puede deshacer.')) return
+
+    // 1. Traer el pago para su id_doc (RC-...)
+    const { data: pago } = await supabase.from('caja').select('id_doc').eq('id', id).single()
+
+    // 2. Borrar el asiento del pago + sus líneas (por documento_id = id_doc del recibo)
+    if (pago?.id_doc) {
+      const { data: asientos } = await supabase.from('asientos_contables').select('id').eq('documento_id', pago.id_doc)
+      for (const a of (asientos || [])) {
+        await supabase.from('asientos_lineas').delete().eq('asiento_id', a.id)
+        await supabase.from('asientos_contables').delete().eq('id', a.id)
+      }
+    }
+
+    // 3. Borrar el pago
     await supabase.from('caja').delete().eq('id', id)
+
     await cargarDatos()
   }
 

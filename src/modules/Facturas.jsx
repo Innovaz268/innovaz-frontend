@@ -124,8 +124,58 @@ function Facturas() {
     let codigo = ''
 let error
     if (editandoId) {
-      const res = await supabase.from('contratos').update(datos).eq('id', editandoId)
+      // Al editar: revertir rastros viejos (stock, kardex, líneas, asiento) y recrear
+      // 1. Devolver stock de las salidas viejas
+      const { data: movsViejos } = await supabase.from('kardex').select('equipo_id, tipo, cantidad').eq('contrato_id', editandoId)
+      for (const m of (movsViejos || [])) {
+        if (m.tipo === 'Salida' && m.equipo_id) {
+          const { data: eq } = await supabase.from('equipos').select('stock').eq('id', m.equipo_id).single()
+          if (eq) await supabase.from('equipos').update({ stock: (eq.stock || 0) + (parseInt(m.cantidad) || 0) }).eq('id', m.equipo_id)
+        }
+      }
+      // 2. Borrar kardex, líneas y asiento viejos
+      await supabase.from('kardex').delete().eq('contrato_id', editandoId)
+      await supabase.from('alquiler_lineas').delete().eq('contrato_id', editandoId)
+      const { data: facVieja } = await supabase.from('contratos').select('id_doc').eq('id', editandoId).single()
+      codigo = facVieja?.id_doc || ''
+      if (codigo) {
+        const { data: asViejo } = await supabase.from('asientos_contables').select('id').eq('documento_id', codigo)
+        for (const a of (asViejo || [])) {
+          await supabase.from('asientos_lineas').delete().eq('asiento_id', a.id)
+          await supabase.from('asientos_contables').delete().eq('id', a.id)
+        }
+      }
+      // 3. Actualizar el contrato (conserva su id_doc)
+      const res = await supabase.from('contratos').update(datos).eq('id', editandoId).select().single()
       error = res.error
+      if (!error && res.data) {
+        const lineas = form.items.map(it => ({
+          contrato_id: res.data.id,
+          equipo_id: it.equipo_id || null,
+          nombre: it.nombre || '',
+          cantidad: parseFloat(it.cantidad) || 1,
+          dias: parseFloat(it.dias) || 1,
+          tarifa: parseFloat(it.tarifa) || 0,
+          subtotal: parseFloat(it.subtotal) || 0,
+          fecha_salida: form.fecha_salida || null,
+          fecha_est_dev: form.fecha_est_dev || null,
+          estado: 'En obra',
+          empresa_id: empresaActiva()
+        }))
+        if (lineas.length > 0) await supabase.from('alquiler_lineas').insert(lineas)
+        for (const it of form.items) {
+          if (it.equipo_id) {
+            await moverKardex({
+              equipo_id: it.equipo_id,
+              tipo: 'Salida',
+              cantidad: it.cantidad,
+              contrato_id: res.data.id,
+              observacion: 'Alquiler ' + (codigo || '')
+            })
+          }
+        }
+        await asientoFactura({ ...datos, id_doc: codigo })
+      }
     } else {
       codigo = await siguienteConsecutivo('FC')
       const datos2 = { ...datos, id_doc: codigo, empresa_id: empresaActiva() }

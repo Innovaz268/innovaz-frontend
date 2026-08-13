@@ -176,10 +176,57 @@ let error
   }
 
   async function eliminarFactura(id) {
-    if (!window.confirm('¿Eliminar esta factura?')) return
+    if (!window.confirm('¿Eliminar esta factura? Se borrarán también su asiento contable, los pagos recibidos, y se devolverá el stock de los equipos. Esta acción no se puede deshacer.')) return
+
+    // 1. Traer la factura (para su id_doc)
+    const { data: factura } = await supabase.from('contratos').select('id_doc').eq('id', id).single()
+    const idDoc = factura?.id_doc
+
+    // 2. Devolver el stock: leer las salidas de kardex de esta factura y sumar de vuelta
+    const { data: movs } = await supabase.from('kardex').select('equipo_id, tipo, cantidad').eq('contrato_id', id)
+    for (const m of (movs || [])) {
+      if (m.tipo === 'Salida' && m.equipo_id) {
+        const { data: eq } = await supabase.from('equipos').select('stock').eq('id', m.equipo_id).single()
+        if (eq) {
+          await supabase.from('equipos').update({ stock: (eq.stock || 0) + (parseInt(m.cantidad) || 0) }).eq('id', m.equipo_id)
+        }
+      }
+    }
+
+    // 3. Borrar el kardex de esta factura
+    await supabase.from('kardex').delete().eq('contrato_id', id)
+
+    // 4. Borrar los pagos de caja de esta factura + sus asientos
+    const { data: pagos } = await supabase.from('caja').select('id_doc').eq('contrato_id', id)
+    for (const p of (pagos || [])) {
+      if (p.id_doc) {
+        const { data: asPago } = await supabase.from('asientos_contables').select('id').eq('documento_id', p.id_doc)
+        for (const a of (asPago || [])) {
+          await supabase.from('asientos_lineas').delete().eq('asiento_id', a.id)
+          await supabase.from('asientos_contables').delete().eq('id', a.id)
+        }
+      }
+    }
+    await supabase.from('caja').delete().eq('contrato_id', id)
+
+    // 5. Borrar el asiento de la factura + sus líneas (por id_doc)
+    if (idDoc) {
+      const { data: asFactura } = await supabase.from('asientos_contables').select('id').eq('documento_id', idDoc)
+      for (const a of (asFactura || [])) {
+        await supabase.from('asientos_lineas').delete().eq('asiento_id', a.id)
+        await supabase.from('asientos_contables').delete().eq('id', a.id)
+      }
+    }
+
+    // 6. Borrar las líneas de alquiler
+    await supabase.from('alquiler_lineas').delete().eq('contrato_id', id)
+
+    // 7. Borrar el contrato
     await supabase.from('contratos').delete().eq('id', id)
+
     await cargarDatos()
   }
+  
   function imprimirFactura(c) {
     const trc = terceros.find(t => t.id === c.cliente_id)
     const equipos = lineas.filter(l => l.contrato_id === c.id)

@@ -523,7 +523,7 @@ let error
                           <select value={item.equipo_id} onChange={e => actualizarItem(i, 'equipo_id', e.target.value)}
                             className="w-full px-2 py-1 border border-gray-200 rounded text-xs">
                             <option value="">— Seleccionar —</option>
-                            {equipos.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                            {equipos.map(e => <option key={e.id} value={e.id}>{e.nombre} (disp: {e.stock ?? 0})</option>)}
                           </select>
                         </td>
                         <td className="px-2 py-1"><input type="number" value={item.cantidad} onChange={e => actualizarItem(i, 'cantidad', e.target.value)} disabled={item.bloqueado} className={`w-16 px-2 py-1 border border-gray-200 rounded text-xs ${item.bloqueado ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`} min="1" title={item.bloqueado ? 'Cantidad fija por refacturación' : ''} /></td>

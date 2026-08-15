@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase, empresaActiva } from '../supabase'
 import { siguienteConsecutivo } from '../utils/consecutivo'
+import { imprimirConMembrete } from '../utils/membrete'
+import { compartirDocumento } from '../utils/compartir'
 
 function Cotizaciones() {
   const [cotizaciones, setCotizaciones] = useState([])
@@ -97,6 +99,52 @@ function Cotizaciones() {
     if (!window.confirm('¿Eliminar esta cotización?')) return
     await supabase.from('cotizaciones').delete().eq('id', id)
     await cargarDatos()
+  }
+
+  function htmlCotizacion(c) {
+    const trc = terceros.find(t => t.id === c.cliente_id)
+    const filas = (c.items || []).map(it => `
+      <tr>
+        <td style="padding:6px;border-bottom:1px solid #eee">${it.nombre || ''}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:center">${it.cantidad || 0}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:center">${it.dias || 0}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${fmt(it.tarifa)}</td>
+        <td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${fmt(it.subtotal)}</td>
+      </tr>`).join('')
+    return `
+      <div style="margin-bottom:16px">
+        <p><b>Cotización N°:</b> ${c.id_doc || '—'}</p>
+        <p><b>Cliente:</b> ${trc?.nombre || ''}</p>
+        <p><b>Fecha:</b> ${c.fecha || '—'} &nbsp;&nbsp; <b>Vigencia:</b> ${c.vigencia || '—'}</p>
+        <p><b>Tipo:</b> ${c.tipo || ''}</p>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="padding:6px;text-align:left">Descripción</th>
+            <th style="padding:6px;text-align:center">Cant.</th>
+            <th style="padding:6px;text-align:center">Días</th>
+            <th style="padding:6px;text-align:right">Tarifa</th>
+            <th style="padding:6px;text-align:right">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <div style="margin-top:16px;text-align:right;font-size:13px">
+        <p>Transporte: ${fmt(c.transporte)}</p>
+        <p>Descuento: ${fmt(c.descuento)}</p>
+        <p style="font-size:16px;font-weight:bold;color:#185FA5">TOTAL: ${fmt(c.total)}</p>
+      </div>
+      ${c.observaciones ? `<div style="margin-top:12px;font-size:12px;color:#666"><b>Observaciones:</b> ${c.observaciones}</div>` : ''}
+    `
+  }
+
+  function imprimirCotizacion(c) {
+    imprimirConMembrete('COTIZACIÓN ' + (c.id_doc || ''), htmlCotizacion(c), '#185FA5')
+  }
+
+  async function compartirCotizacion(c) {
+    await compartirDocumento(htmlCotizacion(c), 'Cotizacion-' + (c.id_doc || 'SN'), 'Le comparto la cotización ' + (c.id_doc || ''))
   }
 
   const estadoBadge = estado => {
@@ -275,6 +323,8 @@ function Cotizaciones() {
                     <td className="px-4 py-2 text-xs font-semibold text-[#185FA5]">{fmt(c.total)}</td>
                     <td className="px-4 py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${estadoBadge(c.estado)}`}>{c.estado}</span></td>
                     <td className="px-4 py-2 text-right flex gap-2 justify-end">
+                      <button onClick={() => imprimirCotizacion(c)} className="text-xs text-gray-500 hover:text-gray-700" title="Imprimir">🖨️</button>
+                      <button onClick={() => compartirCotizacion(c)} className="text-xs hover:opacity-70" title="Compartir">📲</button>
                       <button onClick={() => abrirEditar(c)} className="text-xs text-blue-400 hover:text-blue-600">✏️</button>
                       <button onClick={() => eliminarCotizacion(c.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                     </td>

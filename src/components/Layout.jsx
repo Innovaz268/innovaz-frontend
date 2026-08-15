@@ -1,4 +1,4 @@
-function Layout({ user, empresa, esSuperUsuario, listaEmpresas = [], onCambiarEmpresa, onLogout, moduloActivo, onModulo, children }) {
+function Layout({ user, empresa, esSuperUsuario, modulosPermitidos = null, listaEmpresas = [], onCambiarEmpresa, onLogout, moduloActivo, onModulo, children }) {
   const mods = empresa?.modulos || []
   const tieneAlquiler = mods.includes('alquiler')
   const tieneMuebles = mods.includes('muebles')
@@ -27,6 +27,12 @@ function Layout({ user, empresa, esSuperUsuario, listaEmpresas = [], onCambiarEm
     ...(esSuperUsuario ? [{ id: 'usuarios', label: '👥 Usuarios' }] : []),
   ]
 
+  // Filtrar por permisos: si el usuario tiene modulos_permitidos, solo ve esos
+  // (el super usuario y quien no tenga restricción ven todo)
+  const modulosVisibles = modulosPermitidos
+    ? modulos.filter(m => modulosPermitidos.includes(m.id))
+    : modulos
+
   return (
     <div className="min-h-screen bg-[#f5f5f3]">
       <div className="px-4 py-3 flex items-center justify-between shadow-sm"
@@ -51,7 +57,7 @@ function Layout({ user, empresa, esSuperUsuario, listaEmpresas = [], onCambiarEm
       </div>
 
       <div className="bg-white border-b border-gray-200 px-4 flex gap-1 overflow-x-auto">
-        {modulos.map(mod => {
+        {modulosVisibles.map(mod => {
           const activo = moduloActivo === mod.id
           return (
             <button key={mod.id} onClick={() => onModulo(mod.id)}

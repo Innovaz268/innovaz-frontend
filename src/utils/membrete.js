@@ -1,25 +1,37 @@
-// Membrete reutilizable para documentos e informes imprimibles de INNOVAZ
-const LOGO = 'https://kdfoptwfvqyexhcgllyt.supabase.co/storage/v1/object/public/publico/InnovazLogo.png'
+// Membrete reutilizable para documentos e informes imprimibles.
+// Lee los datos de la EMPRESA ACTIVA desde localStorage (dinámico por empresa).
+const LOGO_DEFAULT = 'https://kdfoptwfvqyexhcgllyt.supabase.co/storage/v1/object/public/publico/InnovazLogo.png'
 
-export const EMPRESA = {
-  nombre: 'INNOVAZ',
-  eslogan: 'Alquiler y Construcción · Diseño y Acabados',
-  telefonos: '8784-8941 / 8908-6712',
-  direccion: 'San José, Costa Rica — Desamparados, San Juan de Dios, Diagonal a cementerio',
-  // NIT y demás datos se agregan aquí cuando estén disponibles
+// Devuelve los datos de la empresa activa (o los de INNOVAZ por defecto)
+export function empresaMembrete() {
+  try {
+    const datos = JSON.parse(localStorage.getItem('empresa_datos') || '{}')
+    return {
+      nombre: datos.nombre || 'INNOVAZ',
+      eslogan: datos.eslogan || '',
+      telefonos: datos.telefonos || '',
+      direccion: datos.direccion || '',
+      logo_url: datos.logo_url || LOGO_DEFAULT,
+    }
+  } catch {
+    return { nombre: 'INNOVAZ', eslogan: '', telefonos: '', direccion: '', logo_url: LOGO_DEFAULT }
+  }
 }
 
-// Devuelve el HTML del encabezado con logo y datos de la empresa.
-// color: color de acento (ej. '#185FA5' para informes, '#5B21B6' para muebles)
+// Se mantiene EMPRESA por compatibilidad (usa la empresa activa)
+export const EMPRESA = empresaMembrete()
+
+// Devuelve el HTML del encabezado con logo y datos de la empresa activa.
 export function membreteHTML(color = '#185FA5') {
+  const emp = empresaMembrete()
   return `
     <div style="display:flex;align-items:center;gap:20px;border-bottom:3px solid ${color};padding-bottom:15px;">
-      <img src="${LOGO}" alt="INNOVAZ" style="height:80px;object-fit:contain;">
+      <img src="${emp.logo_url}" alt="${emp.nombre}" style="height:80px;object-fit:contain;">
       <div style="flex:1;">
-        <h1 style="margin:0;color:${color};font-size:22px;">${EMPRESA.nombre}</h1>
-        <p style="margin:2px 0;font-size:11px;color:#555;"><em>${EMPRESA.eslogan}</em></p>
-        <p style="margin:2px 0;font-size:11px;color:#555;">Tel: ${EMPRESA.telefonos}</p>
-        <p style="margin:2px 0;font-size:11px;color:#555;">${EMPRESA.direccion}</p>
+        <h1 style="margin:0;color:${color};font-size:22px;">${emp.nombre}</h1>
+        ${emp.eslogan ? `<p style="margin:2px 0;font-size:11px;color:#555;"><em>${emp.eslogan}</em></p>` : ''}
+        ${emp.telefonos ? `<p style="margin:2px 0;font-size:11px;color:#555;">Tel: ${emp.telefonos}</p>` : ''}
+        ${emp.direccion ? `<p style="margin:2px 0;font-size:11px;color:#555;">${emp.direccion}</p>` : ''}
       </div>
     </div>`
 }

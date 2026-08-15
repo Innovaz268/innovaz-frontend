@@ -65,6 +65,7 @@ function App() {
         if (empActiva) {
           setEmpresa(empActiva)
           localStorage.setItem('empresa_id', empActiva.id)
+          localStorage.setItem('empresa_datos', JSON.stringify(empActiva))
           document.documentElement.style.setProperty('--color-empresa', empActiva.color || '#185FA5')
           setCargandoEmpresa(false)
           return
@@ -80,6 +81,7 @@ function App() {
       setRolUsuario(ue.rol || null)
       if (emp) {
         localStorage.setItem('empresa_id', emp.id)
+        localStorage.setItem('empresa_datos', JSON.stringify(emp))
         document.documentElement.style.setProperty('--color-empresa', emp.color || '#185FA5')
       }
     } else if (esSuper) {

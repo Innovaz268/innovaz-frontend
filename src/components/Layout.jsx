@@ -24,6 +24,7 @@ function Layout({ user, empresa, esSuperUsuario, listaEmpresas = [], onCambiarEm
     // Administración
     ...(user?.email === 'admin@innovaz.com' ? [{ id: 'supervisor', label: '🛠️ Supervisor' }] : []),
     ...(esSuperUsuario ? [{ id: 'empresas', label: '🏢 Empresas' }] : []),
+    ...(esSuperUsuario ? [{ id: 'usuarios', label: '👥 Usuarios' }] : []),
   ]
 
   return (

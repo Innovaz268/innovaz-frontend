@@ -13,6 +13,7 @@ import Contabilidad from './modules/Contabilidad'
 import Informes from './modules/Informes'
 import Supervisor from './modules/Supervisor'
 import Empresas from './modules/Empresas'
+import Usuarios from './modules/Usuarios'
 
 function App() {
   const [email, setEmail] = useState('')
@@ -129,7 +130,7 @@ function App() {
         {modulo === 'caja' && <Caja />}
         {modulo === 'contabilidad' && <Contabilidad />}
         {modulo === 'informes' && <Informes />}
-        {modulo === 'empresas' && <Empresas />}
+        {modulo === 'usuarios' && <Usuarios empresa={empresa} esSuperUsuario={esSuperUsuario} />}
         {modulo === 'flujo' && ((empresa?.modulos || []).includes('alquiler') || (empresa?.modulos || []).includes('muebles')) && <Flujo />}
         {modulo === 'equipos'      && (empresa?.modulos || []).includes('alquiler') && <Equipos />}
         {modulo === 'contratos' && (empresa?.modulos || []).includes('alquiler') && <Facturas />}

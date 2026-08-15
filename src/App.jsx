@@ -27,6 +27,7 @@ function App() {
   const [cargandoEmpresa, setCargandoEmpresa] = useState(true)
   const [listaEmpresas, setListaEmpresas] = useState([])
   const [modulosPermitidos, setModulosPermitidos] = useState(null)
+  const [rolUsuario, setRolUsuario] = useState(null)
 
   useEffect(() => {
     let usuarioActual = null
@@ -71,11 +72,12 @@ function App() {
       }
     }
     // Buscar la empresa del usuario
-    const { data: ue } = await supabase.from('usuarios_empresa').select('empresa_id, modulos_permitidos').eq('user_id', userId).maybeSingle()
+    const { data: ue } = await supabase.from('usuarios_empresa').select('empresa_id, modulos_permitidos, rol').eq('user_id', userId).maybeSingle()
     if (ue?.empresa_id) {
       const { data: emp } = await supabase.from('empresas').select('*').eq('id', ue.empresa_id).maybeSingle()
       setEmpresa(emp || null)
       setModulosPermitidos(ue.modulos_permitidos || null)
+      setRolUsuario(ue.rol || null)
       if (emp) {
         localStorage.setItem('empresa_id', emp.id)
         document.documentElement.style.setProperty('--color-empresa', emp.color || '#185FA5')
@@ -126,7 +128,7 @@ function App() {
       )
     }
     return (
-      <Layout user={user} empresa={empresa} esSuperUsuario={esSuperUsuario} modulosPermitidos={modulosPermitidos} listaEmpresas={listaEmpresas} onCambiarEmpresa={cambiarEmpresa} onLogout={handleLogout} moduloActivo={modulo} onModulo={setModulo}>
+      <Layout user={user} empresa={empresa} esSuperUsuario={esSuperUsuario} rolUsuario={rolUsuario} modulosPermitidos={modulosPermitidos} listaEmpresas={listaEmpresas} onCambiarEmpresa={cambiarEmpresa} onLogout={handleLogout} moduloActivo={modulo} onModulo={setModulo}>
         {modulo === 'dashboard'    && <Dashboard color={empresa?.color || '#185FA5'} />}
         {modulo === 'clientes'     && <Clientes />}
         {modulo === 'caja' && <Caja />}

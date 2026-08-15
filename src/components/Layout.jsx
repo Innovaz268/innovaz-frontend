@@ -1,4 +1,4 @@
-function Layout({ user, empresa, esSuperUsuario, modulosPermitidos = null, listaEmpresas = [], onCambiarEmpresa, onLogout, moduloActivo, onModulo, children }) {
+function Layout({ user, empresa, esSuperUsuario, rolUsuario = null, modulosPermitidos = null, listaEmpresas = [], onCambiarEmpresa, onLogout, moduloActivo, onModulo, children }) {
   const mods = empresa?.modulos || []
   const tieneAlquiler = mods.includes('alquiler')
   const tieneMuebles = mods.includes('muebles')
@@ -24,7 +24,7 @@ function Layout({ user, empresa, esSuperUsuario, modulosPermitidos = null, lista
     // Administración
     ...(user?.email === 'admin@innovaz.com' ? [{ id: 'supervisor', label: '🛠️ Supervisor' }] : []),
     ...(esSuperUsuario ? [{ id: 'empresas', label: '🏢 Empresas' }] : []),
-    ...(esSuperUsuario ? [{ id: 'usuarios', label: '👥 Usuarios' }] : []),
+    ...((esSuperUsuario || rolUsuario === 'admin') ? [{ id: 'usuarios', label: '👥 Usuarios' }] : []),
   ]
 
   // Filtrar por permisos: si el usuario tiene modulos_permitidos, solo ve esos
@@ -32,7 +32,7 @@ function Layout({ user, empresa, esSuperUsuario, modulosPermitidos = null, lista
   const modulosVisibles = modulosPermitidos
     ? modulos.filter(m => modulosPermitidos.includes(m.id))
     : modulos
-
+    
   return (
     <div className="min-h-screen bg-[#f5f5f3]">
       <div className="px-4 py-3 flex items-center justify-between shadow-sm"

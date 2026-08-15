@@ -22,15 +22,46 @@ function Usuarios({ empresa, esSuperUsuario }) {
   const [form, setForm] = useState({ email: '', password: '', modulos: [] })
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
+  const [editandoUsuario, setEditandoUsuario] = useState(null)
+  const [modulosEdit, setModulosEdit] = useState([])
 
   useEffect(() => { cargarUsuarios() }, [])
 
   async function cargarUsuarios() {
     const { data } = await supabase
       .from('usuarios_empresa')
-      .select('id, user_id, rol, modulos_permitidos')
+      .select('id, user_id, rol, modulos_permitidos, email')
       .eq('empresa_id', empresaActiva())
     setUsuarios(data || [])
+  }
+
+  async function quitarAcceso(u) {
+    if (!window.confirm('¿Quitar el acceso de este usuario a la empresa? El usuario ya no podrá entrar a esta empresa (su cuenta de acceso no se elimina).')) return
+    await supabase.from('usuarios_empresa').delete().eq('id', u.id)
+    await cargarUsuarios()
+  }
+
+  async function cambiarRol(u, nuevoRol) {
+    await supabase.from('usuarios_empresa').update({ rol: nuevoRol }).eq('id', u.id)
+    await cargarUsuarios()
+  }
+
+  function abrirEditarModulos(u) {
+    setEditandoUsuario(u)
+    setModulosEdit(u.modulos_permitidos || [])
+    setMensaje('')
+  }
+
+  function toggleModuloEdit(id) {
+    setModulosEdit(m => m.includes(id) ? m.filter(x => x !== id) : [...m, id])
+  }
+
+  async function guardarModulos() {
+    await supabase.from('usuarios_empresa')
+      .update({ modulos_permitidos: modulosEdit.length > 0 ? modulosEdit : null })
+      .eq('id', editandoUsuario.id)
+    setEditandoUsuario(null)
+    await cargarUsuarios()
   }
 
   function toggleModulo(id) {
@@ -99,6 +130,28 @@ function Usuarios({ empresa, esSuperUsuario }) {
         </div>
       )}
 
+      {editandoUsuario && (
+        <div className="card p-4 mb-4 border-2 border-blue-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-700">Editar módulos de {editandoUsuario.user_id?.slice(0, 8)}...</h3>
+            <button onClick={() => setEditandoUsuario(null)} className="text-gray-400 hover:text-gray-600 text-xs">Cancelar</button>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {MODULOS_DISPONIBLES.map(m => (
+              <label key={m.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={modulosEdit.includes(m.id)} onChange={() => toggleModuloEdit(m.id)} />
+                {m.label}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mb-3">Si no marca ninguno, el usuario verá todos los módulos.</p>
+          <button onClick={guardarModulos}
+            className="px-6 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            ✓ Guardar módulos
+          </button>
+        </div>
+      )}
+
       {mostrarForm && (
         <div className="card p-4 mb-4">
           <div className="grid grid-cols-2 gap-3 mb-3">
@@ -140,17 +193,28 @@ function Usuarios({ empresa, esSuperUsuario }) {
               <th className="px-4 py-2 text-left text-gray-500">Usuario (ID)</th>
               <th className="px-4 py-2 text-left text-gray-500">Rol</th>
               <th className="px-4 py-2 text-left text-gray-500">Módulos permitidos</th>
+              <th className="px-4 py-2 text-left text-gray-500">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {usuarios.length === 0 ? (
-              <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-300">Sin usuarios</td></tr>
+              <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-300">Sin usuarios</td></tr>
             ) : usuarios.map(u => (
               <tr key={u.id} className="border-t border-gray-50">
-                <td className="px-4 py-2 text-gray-600">{u.user_id?.slice(0, 8)}...</td>
-                <td className="px-4 py-2">{u.rol || 'usuario'}</td>
+                <td className="px-4 py-2 text-gray-600">{u.email || (u.user_id?.slice(0, 8) + '...')}</td>
+                <td className="px-4 py-2">
+                  <select value={u.rol || 'usuario'} onChange={e => cambiarRol(u, e.target.value)}
+                    className="px-2 py-1 border border-gray-200 rounded text-xs">
+                    <option value="usuario">usuario</option>
+                    <option value="admin">admin</option>
+                  </select>
+                </td>
                 <td className="px-4 py-2 text-gray-500">
                   {u.modulos_permitidos ? u.modulos_permitidos.join(', ') : 'Todos'}
+                </td>
+                <td className="px-4 py-2">
+                  <button onClick={() => abrirEditarModulos(u)} className="text-blue-500 hover:text-blue-700 mr-3">✏️ Módulos</button>
+                  <button onClick={() => quitarAcceso(u)} className="text-red-400 hover:text-red-600">✕ Quitar</button>
                 </td>
               </tr>
             ))}

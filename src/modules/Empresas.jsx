@@ -15,10 +15,10 @@ function Empresas() {
 
   useEffect(() => { cargar() }, [])
 
-  async function cargar() {
+ async function cargar() {
     const { data } = await supabase.from('empresas').select('*').order('nombre')
     setEmpresas(data || [])
-  }
+  } 
 
   async function crearEmpresa() {
     if (!form.nombre.trim()) { setMensaje('El nombre es obligatorio'); return }

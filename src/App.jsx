@@ -132,6 +132,7 @@ function App() {
         {modulo === 'dashboard'    && <Dashboard color={empresa?.color || '#185FA5'} />}
         {modulo === 'clientes'     && <Clientes />}
         {modulo === 'caja' && <Caja />}
+        {modulo === 'empresas' && <Empresas />}
         {modulo === 'contabilidad' && <Contabilidad />}
         {modulo === 'informes' && <Informes />}
         {modulo === 'usuarios' && <Usuarios empresa={empresa} esSuperUsuario={esSuperUsuario} />}

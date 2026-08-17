@@ -25,6 +25,7 @@ function Layout({ user, empresa, esSuperUsuario, rolUsuario = null, modulosPermi
     ...(user?.email === 'admin@innovaz.com' ? [{ id: 'supervisor', label: '🛠️ Supervisor' }] : []),
     ...(esSuperUsuario ? [{ id: 'empresas', label: '🏢 Empresas' }] : []),
     ...((esSuperUsuario || rolUsuario === 'admin') ? [{ id: 'usuarios', label: '👥 Usuarios' }] : []),
+    ...((esSuperUsuario || rolUsuario === 'admin') ? [{ id: 'auditoria', label: '🔍 Auditoría' }] : []),
   ]
 
   // Filtrar por permisos: si el usuario tiene modulos_permitidos, solo ve esos

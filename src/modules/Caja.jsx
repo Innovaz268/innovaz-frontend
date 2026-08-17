@@ -4,6 +4,7 @@ import { siguienteConsecutivo } from '../utils/consecutivo'
 import { asientoPago } from '../utils/asientosAuto'
 import { imprimirConMembrete } from '../utils/membrete'
 import PanelFirma from '../components/PanelFirma'
+import { registrarAuditoria } from '../utils/auditoria'
 
 function Caja() {
   const [pagos, setPagos] = useState([])
@@ -68,6 +69,7 @@ function Caja() {
     const { error } = await supabase.from('caja').insert([datosRC])
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
     await asientoPago({ ...datosRC }, clienteId)
+    await registrarAuditoria('registró pago', 'Recibo', codigo, 'Monto: ' + form.monto)
     setMensaje('✓ Pago registrado correctamente')
     setForm({ contrato_id: '', fecha: new Date().toISOString().slice(0,10), monto: '', metodo: 'Efectivo', concepto: 'Abono factura' })
     setMostrarForm(false)
@@ -112,6 +114,7 @@ function Caja() {
     // 3. Borrar el pago
     await supabase.from('caja').delete().eq('id', id)
 
+    await registrarAuditoria('eliminó', 'Recibo', pago?.id_doc || '')
     await cargarDatos()
   }
 

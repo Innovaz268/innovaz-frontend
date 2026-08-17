@@ -14,6 +14,7 @@ import Informes from './modules/Informes'
 import Supervisor from './modules/Supervisor'
 import Empresas from './modules/Empresas'
 import Usuarios from './modules/Usuarios'
+import Auditoria from './modules/Auditoria'
 
 function App() {
   const [email, setEmail] = useState('')
@@ -135,6 +136,7 @@ function App() {
         {modulo === 'clientes'     && <Clientes />}
         {modulo === 'caja' && <Caja />}
         {modulo === 'empresas' && <Empresas />}
+        {modulo === 'auditoria' && <Auditoria />}
         {modulo === 'contabilidad' && <Contabilidad />}
         {modulo === 'informes' && <Informes />}
         {modulo === 'usuarios' && <Usuarios empresa={empresa} esSuperUsuario={esSuperUsuario} />}

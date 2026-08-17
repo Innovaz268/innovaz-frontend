@@ -5,6 +5,7 @@ import { asientoFactura } from '../utils/asientosAuto'
 import { moverKardex } from '../utils/kardexAuto'
 import { imprimirConMembrete } from '../utils/membrete'
 import PanelFirma from '../components/PanelFirma'
+import { registrarAuditoria } from '../utils/auditoria'
 
 function Facturas() {
   const [contratos, setContratos] = useState([])
@@ -176,6 +177,7 @@ let error
           }
         }
         await asientoFactura({ ...datos, id_doc: codigo })
+        await registrarAuditoria('editó', 'Factura', codigo)
       }
     } else {
       codigo = await siguienteConsecutivo('FC')
@@ -242,7 +244,10 @@ let error
       }
     }
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
-    if (!editandoId) await asientoFactura({ ...datos, id_doc: codigo })
+    if (!editandoId) {
+      await asientoFactura({ ...datos, id_doc: codigo })
+      await registrarAuditoria('creó', 'Factura', codigo)
+    }
     setMensaje(editandoId ? 'Factura actualizada' : 'Factura creada')  
     setMostrarForm(false)
     setRefacturando([])
@@ -301,6 +306,7 @@ let error
     // 7. Borrar el contrato
     await supabase.from('contratos').delete().eq('id', id)
 
+    await registrarAuditoria('eliminó', 'Factura', idDoc || '')
     await cargarDatos()
   }
 

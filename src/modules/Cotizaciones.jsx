@@ -3,6 +3,7 @@ import { supabase, empresaActiva } from '../supabase'
 import { siguienteConsecutivo } from '../utils/consecutivo'
 import { imprimirConMembrete } from '../utils/membrete'
 import { compartirDocumento } from '../utils/compartir'
+import { registrarAuditoria } from '../utils/auditoria'
 
 function Cotizaciones() {
   const [cotizaciones, setCotizaciones] = useState([])
@@ -83,11 +84,13 @@ function Cotizaciones() {
       error = res.error
     } else {
       const codigo = await siguienteConsecutivo('CQ')
-      const datos2 = { ...datos, id_doc: codigo, empresa_id: empresaActiva() }
+      datos.id_doc = codigo
+      const datos2 = { ...datos, empresa_id: empresaActiva() }
       const res = await supabase.from('cotizaciones').insert([datos2])
       error = res.error
     }
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
+    await registrarAuditoria(editandoId ? 'editó' : 'creó', 'Cotización', datos.id_doc || '')
     setMensaje(editandoId ? '✓ Actualizada' : '✓ Cotización guardada')
     setMostrarForm(false)
     setEditandoId(null)
@@ -97,7 +100,9 @@ function Cotizaciones() {
 
   async function eliminarCotizacion(id) {
     if (!window.confirm('¿Eliminar esta cotización?')) return
+    const cot = cotizaciones.find(c => c.id === id)
     await supabase.from('cotizaciones').delete().eq('id', id)
+    await registrarAuditoria('eliminó', 'Cotización', cot?.id_doc || '')
     await cargarDatos()
   }
 

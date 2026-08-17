@@ -176,6 +176,53 @@ function Informes() {
     imprimirConMembrete('Saldos por Tercero', contenido, '#185FA5')
   }
 
+  function imprimirBalancePrueba() {
+    let filas = ''
+    balancePrueba.forEach(r => {
+      filas += `<tr>
+        <td>${r.codigo}</td>
+        <td>${r.nombre}</td>
+        <td class="der">${fmt(r.saldoAnt)}</td>
+        <td class="der">${r.debe ? fmt(r.debe) : '—'}</td>
+        <td class="der">${r.haber ? fmt(r.haber) : '—'}</td>
+        <td class="der">${fmt(r.saldoFin)}</td>
+      </tr>`
+    })
+    const cuadre = Math.round(totalBP.debe - totalBP.haber) === 0 ? '✓ Cuadra' : '⚠ Descuadre'
+    filas += `<tr class="tot">
+      <td colspan="3">TOTALES</td>
+      <td class="der">${fmt(totalBP.debe)}</td>
+      <td class="der">${fmt(totalBP.haber)}</td>
+      <td class="der">${cuadre}</td>
+    </tr>`
+    const contenido = `
+      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:10px">Del ${desde} al ${hasta}</p>
+      <table><thead><tr>
+        <th>Código</th><th>Cuenta</th><th class="der">Saldo anterior</th>
+        <th class="der">Débitos</th><th class="der">Créditos</th><th class="der">Saldo final</th>
+      </tr></thead><tbody>${filas}</tbody></table>`
+    imprimirConMembrete('Balance de Prueba', contenido, '#185FA5')
+  }
+
+  function exportarBalancePrueba() {
+    const datos = balancePrueba.map(r => ({
+      'Código': r.codigo,
+      'Cuenta': r.nombre,
+      'Saldo anterior': Math.round(r.saldoAnt),
+      'Débitos': Math.round(r.debe),
+      'Créditos': Math.round(r.haber),
+      'Saldo final': Math.round(r.saldoFin),
+    }))
+    datos.push({
+      'Código': '', 'Cuenta': 'TOTALES',
+      'Saldo anterior': '',
+      'Débitos': Math.round(totalBP.debe),
+      'Créditos': Math.round(totalBP.haber),
+      'Saldo final': '',
+    })
+    exportarExcel(datos, 'Balance_de_Prueba')
+  }
+
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
 
   // Clase de una cuenta segun su codigo (primer digito) o el catalogo
@@ -237,6 +284,48 @@ function Informes() {
       .filter(x => Math.round(x.valor) !== 0)
       .sort((a, b) => a.codigo.localeCompare(b.codigo))
   }
+
+  // BALANCE DE PRUEBA: saldo anterior (antes de 'desde') + movimientos del periodo + saldo final
+  const balancePrueba = (() => {
+    const map = {}
+    lineas.forEach(l => {
+      if (!l.fecha) return
+      const cta = cuentas.find(x => x.codigo === l.cuenta_codigo)
+      if (!cta) return
+      if (!map[l.cuenta_codigo]) {
+        map[l.cuenta_codigo] = {
+          codigo: l.cuenta_codigo,
+          nombre: cta.nombre || l.cuenta_nombre,
+          naturaleza: cta.naturaleza || 'debito',
+          antDebe: 0, antHaber: 0, debe: 0, haber: 0,
+        }
+      }
+      const r = map[l.cuenta_codigo]
+      if (l.fecha < desde) {
+        r.antDebe += l.debe || 0
+        r.antHaber += l.haber || 0
+      } else if (l.fecha <= hasta) {
+        r.debe += l.debe || 0
+        r.haber += l.haber || 0
+      }
+    })
+    return Object.values(map).map(r => {
+      const esDebito = r.naturaleza === 'debito'
+      const saldoAnt = esDebito ? (r.antDebe - r.antHaber) : (r.antHaber - r.antDebe)
+      const saldoFin = esDebito
+        ? (r.antDebe + r.debe) - (r.antHaber + r.haber)
+        : (r.antHaber + r.haber) - (r.antDebe + r.debe)
+      return { ...r, saldoAnt, saldoFin }
+    })
+    .filter(r => Math.round(r.saldoAnt) !== 0 || Math.round(r.debe) !== 0 || Math.round(r.haber) !== 0 || Math.round(r.saldoFin) !== 0)
+    .sort((a, b) => a.codigo.localeCompare(b.codigo))
+  })()
+
+  const totalBP = balancePrueba.reduce((t, r) => ({
+    debe: t.debe + r.debe,
+    haber: t.haber + r.haber,
+  }), { debe: 0, haber: 0 })
+
   const detActivos = saldoClaseBal('Activo', 'debito')
   const detPasivos = saldoClaseBal('Pasivo', 'credito')
   const detPatrimonio = saldoClaseBal('Patrimonio', 'credito')
@@ -336,6 +425,7 @@ function Informes() {
           { id: 'cartera', label: 'Cartera por cliente' },
           { id: 'auxiliar', label: 'Libro auxiliar' },
           { id: 'terceros', label: 'Saldos por tercero' },
+          { id: 'balanceprueba', label: 'Balance de prueba' },
         ].map(t => (
           <button key={t.id} onClick={() => setInforme(t.id)}
             className={`px-3 py-2 text-xs font-bold rounded-lg ${informe === t.id ? 'bg-[#185FA5] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>
@@ -679,6 +769,67 @@ function Informes() {
             </table>
           </div>
         )}
+        </>
+      )}
+
+      {informe === 'balanceprueba' && (
+        <>
+        <div className="flex justify-end gap-2 mb-3">
+          <button onClick={imprimirBalancePrueba}
+            className="px-4 py-2 bg-[#185FA5] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            🖨️ Imprimir
+          </button>
+          <button onClick={exportarBalancePrueba}
+            className="px-4 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90">
+            ⬇ Exportar Excel
+          </button>
+        </div>
+        <div className="card p-3 mb-4 flex gap-3 items-end flex-wrap">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Desde</label>
+            <input type="date" value={desde} onChange={e => setDesde(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Hasta</label>
+            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+          </div>
+        </div>
+        <div className="card overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left text-gray-500 font-semibold">Código</th>
+                <th className="px-3 py-2 text-left text-gray-500 font-semibold">Cuenta</th>
+                <th className="px-3 py-2 text-right text-gray-500 font-semibold">Saldo anterior</th>
+                <th className="px-3 py-2 text-right text-gray-500 font-semibold">Débitos</th>
+                <th className="px-3 py-2 text-right text-gray-500 font-semibold">Créditos</th>
+                <th className="px-3 py-2 text-right text-gray-500 font-semibold">Saldo final</th>
+              </tr>
+            </thead>
+            <tbody>
+              {balancePrueba.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-300">Sin movimientos en el periodo</td></tr>
+              ) : balancePrueba.map(r => (
+                <tr key={r.codigo} className="border-t border-gray-50 hover:bg-gray-50">
+                  <td className="px-3 py-2 font-mono text-gray-600">{r.codigo}</td>
+                  <td className="px-3 py-2">{r.nombre}</td>
+                  <td className="px-3 py-2 text-right text-gray-500">{fmt(r.saldoAnt)}</td>
+                  <td className="px-3 py-2 text-right">{r.debe ? fmt(r.debe) : '—'}</td>
+                  <td className="px-3 py-2 text-right">{r.haber ? fmt(r.haber) : '—'}</td>
+                  <td className="px-3 py-2 text-right font-semibold">{fmt(r.saldoFin)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-300 bg-gray-50">
+                <td colSpan={3} className="px-3 py-2 text-sm font-bold">TOTALES</td>
+                <td className="px-3 py-2 text-right text-sm font-bold text-[#185FA5]">{fmt(totalBP.debe)}</td>
+                <td className="px-3 py-2 text-right text-sm font-bold text-[#185FA5]">{fmt(totalBP.haber)}</td>
+                <td className="px-3 py-2 text-right text-sm font-bold">{Math.round(totalBP.debe - totalBP.haber) === 0 ? '✓ Cuadra' : '⚠ Descuadre'}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
         </>
       )}
     </div>

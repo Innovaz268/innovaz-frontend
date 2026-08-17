@@ -14,3 +14,7 @@ body {
 .btn-empresa {
   background: linear-gradient(to right, var(--color-empresa, #185FA5), color-mix(in srgb, var(--color-empresa, #185FA5) 70%, black));
 }
+html, body, #root {
+  max-width: 100%;
+  overflow-x: hidden;
+}

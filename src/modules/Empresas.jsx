@@ -51,6 +51,12 @@ function Empresas() {
       })
       await supabase.from('puc_cuentas').insert(copia)
     }
+    // 3. Crear el tercero genérico "Cliente cotización" para esta empresa
+    await supabase.from('terceros').insert([{
+      nombre: 'Cliente cotización',
+      clase: 'Cliente',
+      empresa_id: nueva.id,
+    }])
 
     setMensaje('✓ Empresa creada: ' + nueva.nombre + ' (con catálogo de cuentas)')
     setForm({ nombre: '', eslogan: '', nit: '', telefonos: '', direccion: '', logo_url: '', color: '#185FA5' })

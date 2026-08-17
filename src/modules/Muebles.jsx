@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase, empresaActiva } from '../supabase'
 import { siguienteConsecutivo } from '../utils/consecutivo'
 import { asientoMueble, asientoCostosMueble } from '../utils/asientosAuto'
+import { registrarAuditoria } from '../utils/auditoria'
 
 function Muebles() {
   const [vista, setVista] = useState('cotizaciones')
@@ -87,11 +88,13 @@ async function cargarDatos() {
       error = res.error
     } else {
       const codigo = await siguienteConsecutivo('CM')
-      const datos2 = { ...datos, id_doc: codigo, empresa_id: empresaActiva() }
+      datos.id_doc = codigo
+      const datos2 = { ...datos, empresa_id: empresaActiva() }
       const res = await supabase.from('muebles_cotizaciones').insert([datos2])
       error = res.error
     }
     if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
+    await registrarAuditoria(editandoId ? 'editó' : 'creó', 'Cotización muebles', datos.id_doc || '')
     setMensaje(editandoId ? 'Cotizacion actualizada' : 'Cotizacion guardada')
     setMostrarForm(false)
     setEditandoId(null)
@@ -149,8 +152,10 @@ async function cargarDatos() {
     await supabase.from('muebles_facturas').delete().eq('cotizacion_id', id)
 
     // 5. Borrar la cotización
+    const cotBorrada = cotizaciones.find(c => c.id === id)
     await supabase.from('muebles_cotizaciones').delete().eq('id', id)
 
+    await registrarAuditoria('eliminó', 'Cotización muebles', cotBorrada?.id_doc || '')
     await cargarDatos()
   }
 
@@ -179,6 +184,7 @@ async function cargarDatos() {
     // Marcar la cotización como Facturada
     await supabase.from('muebles_cotizaciones').update({ estado: 'Facturada' }).eq('id', c.id)
 
+    await registrarAuditoria('facturó', 'Factura muebles', codigoFM)
     setMensaje('Factura de muebles generada: ' + codigoFM)
     setVista('facturas')
     await cargarDatos()
@@ -201,6 +207,7 @@ async function cargarDatos() {
       empresa_id: empresaActiva()
     }])
     if (error) { setMensaje('Error: ' + error.message); return }
+    await registrarAuditoria('emitió orden', 'Orden muebles', codigoOM)
     setMensaje('Orden de producción emitida: ' + codigoOM)
     setVista('ordenes')
     await cargarDatos()

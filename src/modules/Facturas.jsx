@@ -6,6 +6,7 @@ import { moverKardex } from '../utils/kardexAuto'
 import { imprimirConMembrete } from '../utils/membrete'
 import PanelFirma from '../components/PanelFirma'
 import { registrarAuditoria } from '../utils/auditoria'
+import BuscadorTercero from '../components/BuscadorTercero'
 
 function Facturas() {
   const [contratos, setContratos] = useState([])
@@ -450,11 +451,12 @@ let error
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Cliente *</label>
-              <select value={form.cliente_id} onChange={e => clienteSeleccionado(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
-                <option value="">— Seleccionar cliente —</option>
-                {terceros.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-              </select>
+              <BuscadorTercero
+                value={form.cliente_id}
+                onChange={id => clienteSeleccionado(id)}
+                terceros={terceros}
+                onNuevoTercero={cargarDatos}
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Estado</label>

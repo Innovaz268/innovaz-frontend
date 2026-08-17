@@ -18,7 +18,7 @@ function Layout({ user, empresa, esSuperUsuario, rolUsuario = null, modulosPermi
     ...(tieneMuebles ? [{ id: 'muebles', label: '🪵 Diseño' }] : []),
     // Permanentes contables
     { id: 'caja', label: '💳 Caja' },
-    { id: 'clientes', label: '👥 Clientes' },
+    { id: 'clientes', label: '🧑 Clientes' },
     { id: 'contabilidad', label: '📒 Contabilidad' },
     { id: 'informes', label: '📊 Informes' },
     // Administración

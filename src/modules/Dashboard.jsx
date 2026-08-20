@@ -6,21 +6,34 @@ function Dashboard({ color = '#185FA5' }) {
   const [caja, setCaja] = useState([])
   const [terceros, setTerceros] = useState([])
   const [lineas, setLineas] = useState([])
+  const [lineasContables, setLineasContables] = useState([])
   const [vista, setVista] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function cargarDatos() {
-      const [{ data: ct }, { data: cj }, { data: trcs }, { data: lns }] = await Promise.all([
+            const [{ data: ct }, { data: cj }, { data: trcs }, { data: lns }, { data: asc }, { data: asl }] = await Promise.all([
         supabase.from('contratos').select('*').eq('estado', 'Activo'),
         supabase.from('caja').select('*').order('fecha', { ascending: false }),
         supabase.from('terceros').select('id, nombre'),
         supabase.from('alquiler_lineas').select('*'),
+        supabase.from('asientos_contables').select('id, fecha, descripcion, documento_id'),
+        supabase.from('asientos_lineas').select('*'),
       ])
       setContratos(ct || [])
       setCaja(cj || [])
       setTerceros(trcs || [])
       setLineas(lns || [])
+      // Enlazar cada línea de asiento con la fecha/descripción de su asiento
+      const infoAs = {}
+      ;(asc || []).forEach(a => { infoAs[a.id] = a })
+      const lineasCaja = (asl || []).map(l => ({
+        ...l,
+        fecha: infoAs[l.asiento_id]?.fecha,
+        descripcion: infoAs[l.asiento_id]?.descripcion,
+        documento_id: infoAs[l.asiento_id]?.documento_id,
+      }))
+      setLineasContables(lineasCaja)
       setLoading(false)
     }
     cargarDatos()
@@ -32,7 +45,24 @@ function Dashboard({ color = '#185FA5' }) {
     .reduce((s, p) => s + (p.monto || 0), 0)
   const saldoContrato = c => (c.total || 0) - (c.anticipo || 0) - abonosDeContrato(c)
   const totalCobrar = contratos.reduce((sum, c) => sum + saldoContrato(c), 0)
-  const flujoCaja = caja.reduce((sum, p) => sum + (p.monto || 0), 0)
+    // SALDO REAL DE CAJA: saldo de las cuentas de caja (110505, 110510) según la contabilidad
+  const esCuentaCaja = cod => cod && (cod.startsWith('1105'))
+  const lineasCaja = lineasContables.filter(l => esCuentaCaja(l.cuenta_codigo))
+  const saldoCaja = lineasCaja.reduce((s, l) => s + ((l.debe || 0) - (l.haber || 0)), 0)
+
+  // Movimientos de caja del último mes (para el detalle)
+  const hoyD = new Date()
+  const haceUnMes = new Date(hoyD.getFullYear(), hoyD.getMonth() - 1, hoyD.getDate()).toISOString().slice(0, 10)
+  const movimientosCajaMes = lineasCaja
+    .filter(l => l.fecha && l.fecha >= haceUnMes)
+    .map(l => ({
+      fecha: l.fecha,
+      descripcion: l.descripcion || '',
+      documento_id: l.documento_id || '',
+      ingreso: l.debe || 0,
+      salida: l.haber || 0,
+    }))
+    .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
   const equiposCampo = lineas.filter(l => l.estado === 'En obra').reduce((s, l) => s + (parseFloat(l.cantidad) || 0), 0)
 
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
@@ -43,7 +73,7 @@ function Dashboard({ color = '#185FA5' }) {
     { id: 'facturas', label: 'Facturas activas', valor: contratos.length, color: 'text-[#185FA5]' },
     { id: 'cobrar', label: 'Saldo por cobrar', valor: fmt(totalCobrar), color: 'text-[#27500A]' },
     { id: 'equipos', label: 'Equipos en campo', valor: equiposCampo, color: 'text-[#5B21B6]' },
-    { id: 'caja', label: 'Flujo neto caja', valor: fmt(flujoCaja), color: 'text-[#92400E]' },
+        { id: 'caja', label: 'Saldo en caja', valor: fmt(saldoCaja), color: 'text-[#92400E]' },
   ]
 
   const titulos = {
@@ -153,21 +183,25 @@ function Dashboard({ color = '#185FA5' }) {
         )}
 
         {vista === 'caja' && (
-          caja.length === 0 ? <div className="p-8 text-center text-gray-300 text-sm">No hay movimientos de caja</div> : (
+          movimientosCajaMes.length === 0 ? <div className="p-8 text-center text-gray-300 text-sm">Sin movimientos de caja en el último mes</div> : (
             <table className="w-full text-sm">
               <thead className="bg-gray-50"><tr>
-                <th className={th}>Fecha</th><th className={th}>Documento</th><th className={th}>Concepto</th><th className={th}>Método</th><th className={th}>Monto</th>
+                <th className={th}>Fecha</th><th className={th}>Documento</th><th className={th}>Concepto</th><th className={`${th} text-right`}>Ingreso</th><th className={`${th} text-right`}>Salida</th>
               </tr></thead>
               <tbody>
-                {caja.map(p => (
-                  <tr key={p.id} className="border-t border-gray-50 hover:bg-gray-50">
-                    <td className={`${td} text-gray-500`}>{p.fecha || '—'}</td>
-                    <td className={`${td} text-[#185FA5]`}>{p.id_doc || '—'}</td>
-                    <td className={td}>{p.concepto || '—'}</td>
-                    <td className={`${td} text-gray-500`}>{p.metodo || '—'}</td>
-                    <td className={`${td} font-semibold ${(p.monto || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(p.monto)}</td>
+                {movimientosCajaMes.map((m, i) => (
+                  <tr key={i} className="border-t border-gray-50 hover:bg-gray-50">
+                    <td className={`${td} text-gray-500`}>{m.fecha || '—'}</td>
+                    <td className={`${td} text-[#185FA5]`}>{m.documento_id || '—'}</td>
+                    <td className={td}>{m.descripcion || '—'}</td>
+                    <td className={`${td} text-right font-semibold text-green-600`}>{m.ingreso ? fmt(m.ingreso) : ''}</td>
+                    <td className={`${td} text-right font-semibold text-red-600`}>{m.salida ? fmt(m.salida) : ''}</td>
                   </tr>
                 ))}
+                <tr className="border-t-2 border-gray-300 bg-gray-50">
+                  <td className={`${td} font-bold`} colSpan={3}>SALDO EN CAJA</td>
+                  <td className={`${td} text-right font-bold text-[#92400E]`} colSpan={2}>{fmt(saldoCaja)}</td>
+                </tr>
               </tbody>
             </table>
           )

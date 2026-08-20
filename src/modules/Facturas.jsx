@@ -316,7 +316,7 @@ let error
     const equipos = lineas.filter(l => l.contrato_id === c.id)
     const saldoC = (c.total || 0) - (c.anticipo || 0)
     let filasEq = ''
-    equipos.forEach((l, i) => filasEq += `<tr><td style="text-align:center">${i+1}</td><td>${l.nombre || '—'}</td><td style="text-align:center">${l.fecha_salida || '—'}</td><td style="text-align:center">${l.fecha_est_dev || '—'}</td></tr>`)
+        equipos.forEach((l, i) => filasEq += `<tr><td style="text-align:center">${i+1}</td><td>${l.nombre || '—'}</td><td style="text-align:center">${l.cantidad || 0}</td><td style="text-align:center">${l.fecha_salida || '—'}</td><td style="text-align:center">${l.fecha_est_dev || '—'}</td></tr>`)
     const contenido = `
       <table style="margin-bottom:15px">
         <tr><td class="tot" style="width:30%">Factura N°</td><td>${c.id_doc || '—'}</td><td class="tot" style="width:20%">Fecha</td><td>${c.fecha_salida || '—'}</td></tr>
@@ -324,7 +324,7 @@ let error
         <tr><td class="tot">Teléfono</td><td>${trc?.tel || '—'}</td><td class="tot">Dev. estimada</td><td>${c.fecha_est_dev || '—'}</td></tr>
         <tr><td class="tot">Ubicación</td><td colspan="3">${c.ubicacion || '—'}</td></tr>
       </table>
-      ${equipos.length > 0 ? `<table><thead><tr><th style="width:40px">#</th><th>Equipo</th><th style="width:90px">Salida</th><th style="width:90px">Dev. est.</th></tr></thead><tbody>${filasEq}</tbody></table>` : ''}
+            ${equipos.length > 0 ? `<table><thead><tr><th style="width:40px">#</th><th>Equipo</th><th style="width:60px">Cant.</th><th style="width:90px">Salida</th><th style="width:90px">Dev. est.</th></tr></thead><tbody>${filasEq}</tbody></table>` : ''}
       <table style="margin-top:15px;width:50%;margin-left:auto">
         <tr><td class="tot">Total</td><td class="der">${fmt(c.total)}</td></tr>
         <tr><td class="tot">Anticipo</td><td class="der">${fmt(c.anticipo)}</td></tr>

@@ -19,6 +19,7 @@ function Contabilidad() {
     codigo: '', nombre: '', tipo: 'ACTIVO', grupo: '', naturaleza: 'debito', nivel: 3, cuenta_padre: '', sistema: false
   })
 
+  const [editandoAsientoId, setEditandoAsientoId] = useState(null)
   const [formAsiento, setFormAsiento] = useState({
     fecha: new Date().toISOString().slice(0, 10),
     descripcion: '',
@@ -102,23 +103,61 @@ function Contabilidad() {
   const totalHaber = formAsiento.lineas.reduce((s, l) => s + (parseFloat(l.haber) || 0), 0)
   const asientoBalanceado = Math.abs(totalDebe - totalHaber) < 0.01
 
+    function abrirEditarAsiento(a) {
+    setEditandoAsientoId(a.id)
+    setFormAsiento({
+      fecha: a.fecha || new Date().toISOString().slice(0, 10),
+      descripcion: a.descripcion || '',
+      tipo_doc: a.tipo_doc || 'Manual',
+      documento_id: a.documento_id || '',
+      lineas: (a.asientos_lineas || []).map(l => ({
+        cuenta_codigo: l.cuenta_codigo || '',
+        cuenta_nombre: l.cuenta_nombre || '',
+        debe: l.debe || 0,
+        haber: l.haber || 0,
+        tercero_id: l.tercero_id || '',
+      })),
+    })
+    setMostrarFormAsiento(true)
+    setMensaje('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function guardarAsiento() {
     if (!formAsiento.descripcion) { setMensaje('La descripcion es obligatoria'); return }
     if (!asientoBalanceado) { setMensaje('El asiento no cuadra: Debe ' + fmt(totalDebe) + ' Haber ' + fmt(totalHaber)); return }
-    setGuardando(true)
-    const { data: asiento, error } = await supabase.from('asientos_contables').insert([{
-      fecha: formAsiento.fecha,
-      descripcion: formAsiento.descripcion,
-      tipo_doc: formAsiento.tipo_doc,
-      documento_id: formAsiento.documento_id,
-      empresa_id: empresaActiva()
-    }]).select().single()
-    if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
-    const lineas = formAsiento.lineas.map(l => ({ ...l, asiento_id: asiento.id, debe: parseFloat(l.debe) || 0, haber: parseFloat(l.haber) || 0, empresa_id: empresaActiva() }))
-    const { error: err2 } = await supabase.from('asientos_lineas').insert(lineas)
-    if (err2) { setMensaje('Error en lineas: ' + err2.message); setGuardando(false); return }
-    setMensaje('Asiento registrado correctamente')
+        setGuardando(true)
+
+    if (editandoAsientoId) {
+      // EDICIÓN: actualizar cabecera, borrar líneas viejas y recrear
+      const { error: errUpd } = await supabase.from('asientos_contables').update({
+        fecha: formAsiento.fecha,
+        descripcion: formAsiento.descripcion,
+        tipo_doc: formAsiento.tipo_doc,
+        documento_id: formAsiento.documento_id,
+      }).eq('id', editandoAsientoId)
+      if (errUpd) { setMensaje('Error: ' + errUpd.message); setGuardando(false); return }
+      await supabase.from('asientos_lineas').delete().eq('asiento_id', editandoAsientoId)
+      const lineasEd = formAsiento.lineas.map(l => ({ ...l, asiento_id: editandoAsientoId, debe: parseFloat(l.debe) || 0, haber: parseFloat(l.haber) || 0, empresa_id: empresaActiva() }))
+      const { error: errLin } = await supabase.from('asientos_lineas').insert(lineasEd)
+      if (errLin) { setMensaje('Error en lineas: ' + errLin.message); setGuardando(false); return }
+      setMensaje('Asiento actualizado correctamente')
+    } else {
+      const { data: asiento, error } = await supabase.from('asientos_contables').insert([{
+        fecha: formAsiento.fecha,
+        descripcion: formAsiento.descripcion,
+        tipo_doc: formAsiento.tipo_doc,
+        documento_id: formAsiento.documento_id,
+        empresa_id: empresaActiva()
+      }]).select().single()
+      if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
+      const lineas = formAsiento.lineas.map(l => ({ ...l, asiento_id: asiento.id, debe: parseFloat(l.debe) || 0, haber: parseFloat(l.haber) || 0, empresa_id: empresaActiva() }))
+      const { error: err2 } = await supabase.from('asientos_lineas').insert(lineas)
+      if (err2) { setMensaje('Error en lineas: ' + err2.message); setGuardando(false); return }
+      setMensaje('Asiento registrado correctamente')
+    }
     setFormAsiento({ fecha: new Date().toISOString().slice(0, 10), descripcion: '', tipo_doc: 'Manual', documento_id: '', lineas: [{ cuenta_codigo: '', cuenta_nombre: '', debe: 0, haber: 0, tercero_id: '' }, { cuenta_codigo: '', cuenta_nombre: '', debe: 0, haber: 0, tercero_id: '' }] })
+    setEditandoAsientoId(null)
     setMostrarFormAsiento(false)
     await cargarDatos()
     setGuardando(false)
@@ -297,7 +336,10 @@ function Contabilidad() {
                     <span className="ml-2 text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">{a.tipo_doc}</span>
                     {a.documento_id && <span className="ml-1 text-xs text-gray-400">{a.documento_id}</span>}
                   </div>
-                  <button onClick={() => eliminarAsiento(a.id)} className="text-xs text-red-400 hover:text-red-600">x</button>
+                                    <div className="flex gap-2">
+                  <button onClick={() => abrirEditarAsiento(a)} className="text-xs text-blue-400 hover:text-blue-600">✏️ editar</button>
+                  <button onClick={() => eliminarAsiento(a.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                  </div>
                 </div>
                 <p className="text-xs text-gray-600 mb-2">{a.descripcion}</p>
                 <table className="w-full text-xs">

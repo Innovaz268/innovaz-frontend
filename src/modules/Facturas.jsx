@@ -241,6 +241,32 @@ let error
               }])
             }
           }
+          // Los equipos NO seleccionados para refacturar quedan Devueltos (se recogieron)
+          const contratosAfectados = [...new Set(refacturando.map(r => r.contrato_id))]
+          const hoyRef = new Date().toISOString().slice(0,10)
+          for (const cid of contratosAfectados) {
+            // Traer las líneas que van a quedar devueltas (las que siguen En obra)
+            const { data: aDevolver } = await supabase.from('alquiler_lineas')
+              .select('*').eq('contrato_id', cid).eq('estado', 'En obra')
+            // Registrar la entrada al kardex de cada equipo devuelto
+            for (const ld of (aDevolver || [])) {
+              if (ld.equipo_id) {
+                await moverKardex({
+                  equipo_id: ld.equipo_id,
+                  tipo: 'Entrada',
+                  cantidad: ld.cantidad,
+                  contrato_id: cid,
+                  observacion: 'Devolución por refacturación'
+                })
+              }
+            }
+            // Marcarlas como devueltas
+            await supabase.from('alquiler_lineas')
+              .update({ estado: 'Devuelto', fecha_dev_real: hoyRef })
+              .eq('contrato_id', cid).eq('estado', 'En obra')
+            // La factura vieja ya no tiene equipos activos → cerrarla
+            await supabase.from('contratos').update({ estado: 'Refacturada' }).eq('id', cid)
+          }
         }
       }
     }

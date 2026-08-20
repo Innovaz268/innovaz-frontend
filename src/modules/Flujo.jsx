@@ -6,6 +6,7 @@ import PanelFirma from '../components/PanelFirma'
 
 function Flujo() {
   const [contratos, setContratos] = useState([])
+  const [alquilerLineas, setAlquilerLineas] = useState([])
   const [cotizaciones, setCotizaciones] = useState([])
   const [terceros, setTerceros] = useState([])
   const [pagos, setPagos] = useState([])
@@ -23,7 +24,7 @@ function Flujo() {
 
   async function cargarDatos() {
     setLoading(true)
-    const [{ data: cts }, { data: cots }, { data: trcs }, { data: pgs }, { data: oms }, { data: cms }, { data: fms }] = await Promise.all([
+      const [{ data: cts }, { data: cots }, { data: trcs }, { data: pgs }, { data: oms }, { data: cms }, { data: fms }, { data: als }] = await Promise.all([
       supabase.from('contratos').select('*').eq('estado', 'Activo'),
       supabase.from('cotizaciones').select('*').order('created_at', { ascending: false }),
       supabase.from('terceros').select('id, nombre, dir').order('nombre'),
@@ -31,6 +32,7 @@ function Flujo() {
       supabase.from('muebles_ordenes').select('*').order('created_at', { ascending: false }),
       supabase.from('muebles_cotizaciones').select('*').order('created_at', { ascending: false }),
       supabase.from('muebles_facturas').select('*').order('created_at', { ascending: false }),
+      supabase.from('alquiler_lineas').select('contrato_id, estado'),
     ])
     setContratos(cts || [])
     setCotizaciones(cots || [])
@@ -39,6 +41,7 @@ function Flujo() {
     setOrdenesMuebles(oms || [])
     setCotsMuebles(cms || [])
     setFacsMuebles(fms || [])
+    setAlquilerLineas(als || [])
     setLoading(false)
   }
 
@@ -102,8 +105,15 @@ function Flujo() {
     (filtroCliente ? c.cliente_id === filtroCliente : true)
   )
 
+    // Una factura tiene equipos pendientes si al menos una de sus líneas NO está devuelta
+  const tieneEquiposPendientes = contratoId => {
+    const lineasDelContrato = alquilerLineas.filter(l => l.contrato_id === contratoId)
+    if (lineasDelContrato.length === 0) return true // sin info de líneas, se deja en campo
+    return lineasDelContrato.some(l => l.estado !== 'Devuelto')
+  }
   const enCampo = contratos.filter(c =>
     c.entregado &&
+    tieneEquiposPendientes(c.id) &&
     (filtroCliente ? c.cliente_id === filtroCliente : true)
   )
 

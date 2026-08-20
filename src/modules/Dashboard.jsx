@@ -26,7 +26,12 @@ function Dashboard({ color = '#185FA5' }) {
     cargarDatos()
   }, [])
 
-  const totalCobrar = contratos.reduce((sum, c) => sum + ((c.total || 0) - (c.anticipo || 0)), 0)
+    // Abonos pagados en caja por cada contrato (factura de alquiler)
+  const abonosDeContrato = c => caja
+    .filter(p => p.contrato_id === c.id)
+    .reduce((s, p) => s + (p.monto || 0), 0)
+  const saldoContrato = c => (c.total || 0) - (c.anticipo || 0) - abonosDeContrato(c)
+  const totalCobrar = contratos.reduce((sum, c) => sum + saldoContrato(c), 0)
   const flujoCaja = caja.reduce((sum, p) => sum + (p.monto || 0), 0)
   const equiposCampo = lineas.filter(l => l.estado === 'En obra').reduce((s, l) => s + (parseFloat(l.cantidad) || 0), 0)
 
@@ -101,7 +106,7 @@ function Dashboard({ color = '#185FA5' }) {
 
         {vista === 'cobrar' && (
           (() => {
-            const conSaldo = contratos.filter(c => ((c.total || 0) - (c.anticipo || 0)) > 0)
+            const conSaldo = contratos.filter(c => saldoContrato(c) > 0)
             return conSaldo.length === 0 ? <div className="p-8 text-center text-gray-300 text-sm">No hay saldos pendientes</div> : (
               <table className="w-full text-sm">
                 <thead className="bg-gray-50"><tr>
@@ -114,7 +119,7 @@ function Dashboard({ color = '#185FA5' }) {
                       <td className={td}>{nombreCliente(c.cliente_id)}</td>
                       <td className={td}>{fmt(c.total)}</td>
                       <td className={`${td} text-gray-500`}>{fmt(c.anticipo)}</td>
-                      <td className={`${td} font-semibold text-red-600`}>{fmt((c.total || 0) - (c.anticipo || 0))}</td>
+                      <td className={`${td} font-semibold text-red-600`}>{fmt(saldoContrato(c))}</td>
                     </tr>
                   ))}
                 </tbody>

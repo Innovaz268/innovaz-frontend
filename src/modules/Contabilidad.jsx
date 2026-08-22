@@ -14,6 +14,11 @@ function Contabilidad() {
   const [mostrarFormPuc, setMostrarFormPuc] = useState(false)
   const [mostrarFormAsiento, setMostrarFormAsiento] = useState(false)
   const [busquedaPuc, setBusquedaPuc] = useState('')
+  const [plantillas, setPlantillas] = useState([])
+  const [mostrarFormPlantilla, setMostrarFormPlantilla] = useState(false)
+  const [formPlantilla, setFormPlantilla] = useState({ nombre: '', cuenta_gasto: '', icono: '💵', requiere_tercero: true })
+  const [plantillaActiva, setPlantillaActiva] = useState(null)
+  const [formPago, setFormPago] = useState({ valor: '', tercero_id: '', cuenta_pago: '110505', fecha: new Date().toISOString().slice(0, 10), descripcion: '' })
 
   const [formPuc, setFormPuc] = useState({
     codigo: '', nombre: '', tipo: 'ACTIVO', grupo: '', naturaleza: 'debito', nivel: 3, cuenta_padre: '', sistema: false
@@ -47,6 +52,8 @@ function Contabilidad() {
     setTerceros(trcs || [])
     setKardex(kdx || [])
     setEquipos(eqs || [])
+    const { data: plts } = await supabase.from('plantillas_pago').select('*').eq('activa', true).order('created_at')
+    setPlantillas(plts || [])
     setLoading(false)
   }
 
@@ -54,6 +61,69 @@ function Contabilidad() {
   const nombreCliente = id => terceros.find(t => t.id === id)?.nombre || '---'
 
   // ── PUC ──
+    async function registrarPagoRapido() {
+    const valor = parseFloat(formPago.valor) || 0
+    if (valor <= 0) { setMensaje('El valor debe ser mayor a 0'); return }
+    if (plantillaActiva?.requiere_tercero && !formPago.tercero_id) { setMensaje('Debe seleccionar el proveedor/persona'); return }
+    setGuardando(true)
+
+    // Consecutivo CE
+    const { data: ultimos } = await supabase.from('asientos_contables')
+      .select('documento_id').eq('empresa_id', empresaActiva()).like('documento_id', 'CE-%')
+    let max = 0
+    ;(ultimos || []).forEach(a => {
+      const n = parseInt((a.documento_id || '').replace('CE-', '')) || 0
+      if (n > max) max = n
+    })
+    const codigo = 'CE-' + String(max + 1).padStart(3, '0')
+
+    const desc = (plantillaActiva?.nombre || 'Pago') + (formPago.descripcion ? ' - ' + formPago.descripcion : '')
+
+    // Crear asiento
+    const { data: asiento, error } = await supabase.from('asientos_contables').insert([{
+      fecha: formPago.fecha,
+      descripcion: desc,
+      tipo_doc: 'Egreso',
+      documento_id: codigo,
+      empresa_id: empresaActiva()
+    }]).select().single()
+    if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
+
+    // Líneas: debita gasto, acredita caja/banco
+    const cuentaGasto = puc.find(p => p.codigo === plantillaActiva.cuenta_gasto)
+    const cuentaPago = puc.find(p => p.codigo === formPago.cuenta_pago)
+    const lineas = [
+      { asiento_id: asiento.id, cuenta_codigo: plantillaActiva.cuenta_gasto, cuenta_nombre: cuentaGasto?.nombre || '', debe: valor, haber: 0, tercero_id: formPago.tercero_id || null, empresa_id: empresaActiva() },
+      { asiento_id: asiento.id, cuenta_codigo: formPago.cuenta_pago, cuenta_nombre: cuentaPago?.nombre || '', debe: 0, haber: valor, tercero_id: formPago.tercero_id || null, empresa_id: empresaActiva() },
+    ]
+    const { error: errLin } = await supabase.from('asientos_lineas').insert(lineas)
+    if (errLin) { setMensaje('Error en líneas: ' + errLin.message); setGuardando(false); return }
+
+    setMensaje('✓ Pago registrado: ' + codigo)
+    setPlantillaActiva(null)
+    setFormPago({ valor: '', tercero_id: '', cuenta_pago: '110505', fecha: new Date().toISOString().slice(0, 10), descripcion: '' })
+    await cargarDatos()
+    setGuardando(false)
+  }
+
+    async function guardarPlantilla() {
+    if (!formPlantilla.nombre || !formPlantilla.cuenta_gasto) { setMensaje('Nombre y cuenta de gasto son obligatorios'); return }
+    setGuardando(true)
+    const { error } = await supabase.from('plantillas_pago').insert([{ ...formPlantilla, empresa_id: empresaActiva() }])
+    if (error) { setMensaje('Error: ' + error.message); setGuardando(false); return }
+    setMensaje('Plantilla guardada correctamente')
+    setFormPlantilla({ nombre: '', cuenta_gasto: '', icono: '💵', requiere_tercero: true })
+    setMostrarFormPlantilla(false)
+    await cargarDatos()
+    setGuardando(false)
+  }
+
+  async function eliminarPlantilla(id) {
+    if (!window.confirm('¿Eliminar esta plantilla de pago?')) return
+    await supabase.from('plantillas_pago').update({ activa: false }).eq('id', id)
+    await cargarDatos()
+  }
+  
   async function guardarCuenta() {
     if (!formPuc.codigo || !formPuc.nombre) { setMensaje('Codigo y nombre son obligatorios'); return }
     setGuardando(true)
@@ -205,10 +275,10 @@ function Contabilidad() {
           <p className="text-xs text-gray-400">Plan Unico de Cuentas Colombia</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {['libro', 'puc', 'kardex'].map(v => (
+          {['libro', 'puc', 'kardex', 'pagos'].map(v => (
             <button key={v} onClick={() => { setVista(v); setMensaje('') }}
               className={`px-3 py-2 text-xs font-bold rounded-lg capitalize ${vista === v ? 'bg-[#185FA5] text-white' : 'bg-white border border-gray-200 text-gray-500'}`}>
-              {v === 'libro' ? 'Libro Diario' : v === 'puc' ? 'Plan de Cuentas' : 'Kardex'}
+              {v === 'libro' ? 'Libro Diario' : v === 'puc' ? 'Plan de Cuentas' : v === 'kardex' ? 'Kardex' : '⚡ Pagos rápidos'}
             </button>
           ))}
         </div>
@@ -643,6 +713,133 @@ function Contabilidad() {
                 </div>
               )
             })()
+          )}
+        </div>
+      )}
+
+      {/* ── PAGOS RÁPIDOS ── */}
+      {vista === 'pagos' && (
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <p className="text-xs text-gray-400">Plantillas de pago rápido. Crea un botón para cada tipo de pago frecuente.</p>
+            <button onClick={() => { setMostrarFormPlantilla(!mostrarFormPlantilla); setMensaje('') }}
+              className="px-4 py-2 btn-empresa text-white text-xs font-bold rounded-lg hover:opacity-90">
+              {mostrarFormPlantilla ? 'Cancelar' : '+ Nueva plantilla'}
+            </button>
+          </div>
+
+          {mostrarFormPlantilla && (
+            <div className="card p-4 mb-4">
+              <h3 className="text-sm font-bold text-gray-700 mb-3">Nueva plantilla de pago</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Nombre del pago</label>
+                  <input value={formPlantilla.nombre} onChange={e => setFormPlantilla({ ...formPlantilla, nombre: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                    placeholder="Ej: Pago combustible" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Icono (emoji)</label>
+                  <input value={formPlantilla.icono} onChange={e => setFormPlantilla({ ...formPlantilla, icono: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                    placeholder="⛽" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Cuenta de gasto (se debita)</label>
+                  <select value={formPlantilla.cuenta_gasto} onChange={e => setFormPlantilla({ ...formPlantilla, cuenta_gasto: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
+                    <option value="">Seleccionar cuenta de gasto/costo</option>
+                    {puc.filter(p => (p.nivel === 'cuenta' || p.nivel === 'auxiliar' || p.nivel === 3 || p.nivel === 5) && p.activa !== false && !puc.some(h => h.codigo !== p.codigo && h.codigo.startsWith(p.codigo))).map(p => (
+                      <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-2 flex items-center gap-2">
+                  <input type="checkbox" id="reqTercero" checked={formPlantilla.requiere_tercero}
+                    onChange={e => setFormPlantilla({ ...formPlantilla, requiere_tercero: e.target.checked })} />
+                  <label htmlFor="reqTercero" className="text-xs font-semibold text-gray-600">Requiere proveedor/persona</label>
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button onClick={guardarPlantilla} disabled={guardando}
+                  className="px-6 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90 disabled:opacity-50">
+                  {guardando ? 'Guardando...' : 'Guardar plantilla'}
+                </button>
+              </div>
+            </div>
+          )}
+
+                    {plantillaActiva && (
+            <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4" onClick={() => setPlantillaActiva(null)}>
+              <div className="bg-white rounded-xl p-5 w-full max-w-md" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-bold text-gray-700">{plantillaActiva.icono} {plantillaActiva.nombre}</h3>
+                  <button onClick={() => setPlantillaActiva(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Valor a pagar</label>
+                    <input type="number" value={formPago.valor} onChange={e => setFormPago({ ...formPago, valor: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                      placeholder="0" autoFocus />
+                  </div>
+                  {plantillaActiva.requiere_tercero && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Proveedor / Persona</label>
+                      <select value={formPago.tercero_id} onChange={e => setFormPago({ ...formPago, tercero_id: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
+                        <option value="">Seleccionar...</option>
+                        {terceros.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Pagar desde</label>
+                    <select value={formPago.cuenta_pago} onChange={e => setFormPago({ ...formPago, cuenta_pago: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
+                      {puc.filter(p => (p.codigo.startsWith('1105') || p.codigo.startsWith('1110')) && !puc.some(h => h.codigo !== p.codigo && h.codigo.startsWith(p.codigo))).map(p => (
+                        <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Fecha</label>
+                    <input type="date" value={formPago.fecha} onChange={e => setFormPago({ ...formPago, fecha: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Detalle (opcional)</label>
+                    <input value={formPago.descripcion} onChange={e => setFormPago({ ...formPago, descripcion: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]"
+                      placeholder="Ej: tanqueo camión, mes de agosto..." />
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button onClick={() => setPlantillaActiva(null)} className="px-4 py-2 text-xs font-bold text-gray-500 border border-gray-200 rounded-lg">Cancelar</button>
+                  <button onClick={registrarPagoRapido} disabled={guardando}
+                    className="px-6 py-2 bg-[#27500A] text-white text-xs font-bold rounded-lg hover:opacity-90 disabled:opacity-50">
+                    {guardando ? 'Registrando...' : 'Registrar pago'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {plantillas.length === 0 ? (
+            <div className="card p-8 text-center text-gray-300 text-sm">No hay plantillas de pago. Crea la primera con "+ Nueva plantilla".</div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {plantillas.map(pl => (
+                <div key={pl.id} className="card p-4 flex flex-col items-center text-center relative hover:shadow-md cursor-pointer"
+                  onClick={() => { setPlantillaActiva(pl); setFormPago({ valor: '', tercero_id: '', cuenta_pago: '110505', fecha: new Date().toISOString().slice(0, 10), descripcion: '' }); setMensaje('') }}>
+                  <button onClick={(e) => { e.stopPropagation(); eliminarPlantilla(pl.id) }}
+                    className="absolute top-2 right-2 text-xs text-red-400 hover:text-red-600">✕</button>
+                  <div className="text-3xl mb-2">{pl.icono || '💵'}</div>
+                  <div className="font-bold text-sm text-gray-700">{pl.nombre}</div>
+                  <div className="text-xs text-gray-400 mt-1">Clic para registrar</div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

@@ -19,6 +19,8 @@ function Contabilidad() {
   const [formPlantilla, setFormPlantilla] = useState({ nombre: '', cuenta_gasto: '', icono: '💵', requiere_tercero: true })
   const [plantillaActiva, setPlantillaActiva] = useState(null)
   const [formPago, setFormPago] = useState({ valor: '', tercero_id: '', cuenta_pago: '110505', fecha: new Date().toISOString().slice(0, 10), descripcion: '' })
+  const [filtroTexto, setFiltroTexto] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
 
   const [formPuc, setFormPuc] = useState({
     codigo: '', nombre: '', tipo: 'ACTIVO', grupo: '', naturaleza: 'debito', nivel: 3, cuenta_padre: '', sistema: false
@@ -59,6 +61,25 @@ function Contabilidad() {
 
   const fmt = n => '$' + Math.round(n || 0).toLocaleString('es-CO')
   const nombreCliente = id => terceros.find(t => t.id === id)?.nombre || '---'
+
+  const totalAsiento = a => (a.asientos_lineas || []).reduce((sum, l) => sum + (Number(l.debe) || 0), 0)
+
+  const estiloTipo = tipo => ({
+    'Factura': { barra: '#185FA5', bg: '#E6F1FB', tx: '#0C447C' },
+    'Recibo de Caja': { barra: '#27500A', bg: '#EAF3DE', tx: '#173404' },
+    'Egreso': { barra: '#A32D2D', bg: '#FCEBEB', tx: '#791F1F' },
+    'Nota Debito': { barra: '#854F0B', bg: '#FAEEDA', tx: '#633806' },
+    'Nota Credito': { barra: '#854F0B', bg: '#FAEEDA', tx: '#633806' }
+  }[tipo] || { barra: '#9CA3AF', bg: '#F3F4F6', tx: '#374151' })
+
+  const asientosFiltrados = asientos.filter(a => {
+    if (filtroTipo && a.tipo_doc !== filtroTipo) return false
+    const t = filtroTexto.trim().toLowerCase()
+    if (!t) return true
+    return (a.documento_id || '').toLowerCase().includes(t)
+      || (a.descripcion || '').toLowerCase().includes(t)
+      || (a.asientos_lineas || []).some(l => nombreCliente(l.tercero_id).toLowerCase().includes(t))
+  })
 
   // ── PUC ──
     async function registrarPagoRapido() {
@@ -393,48 +414,79 @@ function Contabilidad() {
             </div>
           )}
 
-          <div className="card overflow-hidden">
-            {loading ? (
-              <div className="p-8 text-center text-gray-300 text-sm">Cargando...</div>
-            ) : asientos.length === 0 ? (
-              <div className="p-8 text-center text-gray-300 text-sm">No hay asientos registrados</div>
-            ) : asientos.map(a => (
-              <div key={a.id} className="border-b border-gray-50 p-4 hover:bg-gray-50">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <span className="text-xs font-bold text-gray-700">{a.fecha}</span>
-                    <span className="ml-2 text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">{a.tipo_doc}</span>
-                    {a.documento_id && <span className="ml-1 text-xs text-gray-400">{a.documento_id}</span>}
-                  </div>
-                                    <div className="flex gap-2">
-                  <button onClick={() => abrirEditarAsiento(a)} className="text-xs text-blue-400 hover:text-blue-600">✏️ editar</button>
-                  <button onClick={() => eliminarAsiento(a.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-600 mb-2">{a.descripcion}</p>
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-gray-400">
-                      <th className="text-left py-0.5">Cuenta</th>
-                      <th className="text-left py-0.5">Tercero</th>
-                      <th className="text-right py-0.5">Debe</th>
-                      <th className="text-right py-0.5">Haber</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(a.asientos_lineas || []).map((l, i) => (
-                      <tr key={i} className="border-t border-gray-50">
-                        <td className="py-0.5">{l.cuenta_codigo} - {l.cuenta_nombre}</td>
-                        <td className="py-0.5 text-gray-400">{nombreCliente(l.tercero_id)}</td>
-                        <td className="py-0.5 text-right font-semibold">{l.debe > 0 ? fmt(l.debe) : ''}</td>
-                        <td className="py-0.5 text-right font-semibold text-gray-500">{l.haber > 0 ? fmt(l.haber) : ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
+          <div className="flex gap-2 mb-3 flex-wrap">
+            <input value={filtroTexto} onChange={e => setFiltroTexto(e.target.value)}
+              placeholder="Buscar por documento, tercero o concepto"
+              className="flex-1 min-w-[200px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]" />
+            <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#185FA5]">
+              <option value="">Todos los tipos</option>
+              <option>Manual</option>
+              <option>Factura</option>
+              <option>Recibo de Caja</option>
+              <option>Nota Debito</option>
+              <option>Nota Credito</option>
+              <option>Egreso</option>
+            </select>
           </div>
+
+          {loading ? (
+            <div className="card p-8 text-center text-gray-300 text-sm">Cargando...</div>
+          ) : asientosFiltrados.length === 0 ? (
+            <div className="card p-8 text-center text-gray-300 text-sm">No hay asientos que coincidan</div>
+          ) : (
+            <div className="space-y-3">
+              {asientosFiltrados.map(a => {
+                const est = estiloTipo(a.tipo_doc)
+                return (
+                  <div key={a.id} className="card relative overflow-hidden p-4 pl-5">
+                    <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: est.barra }}></div>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: est.bg, color: est.tx }}>{a.tipo_doc}</span>
+                        {a.documento_id && <span className="ml-2 text-sm font-bold text-gray-700">{a.documento_id}</span>}
+                        <span className="ml-2 text-xs text-gray-400">{a.fecha}</span>
+                        {a.descripcion && <p className="text-xs text-gray-500 mt-1">{a.descripcion}</p>}
+                      </div>
+                      <div className="text-right whitespace-nowrap">
+                        <div className="text-sm font-bold text-gray-800">{fmt(totalAsiento(a))}</div>
+                        <div className="flex gap-2 justify-end mt-1">
+                          <button onClick={() => abrirEditarAsiento(a)} className="text-xs text-blue-400 hover:text-blue-600">✏️ editar</button>
+                          <button onClick={() => eliminarAsiento(a.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                        </div>
+                      </div>
+                    </div>
+                                        <table className="w-full text-xs table-fixed tabular-nums border-t border-gray-100 pt-1">
+                      <colgroup>
+                        <col style={{ width: '46%' }} />
+                        <col style={{ width: '24%' }} />
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '15%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr className="text-gray-400">
+                          <th className="text-left py-0.5">Cuenta</th>
+                          <th className="text-left py-0.5">Tercero</th>
+                          <th className="text-right py-0.5">Debe</th>
+                          <th className="text-right py-0.5">Haber</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(a.asientos_lineas || []).map((l, i) => (
+                          <tr key={i} className="border-t border-gray-50">
+                            <td className="py-0.5">{l.cuenta_codigo} - {l.cuenta_nombre}</td>
+                            <td className="py-0.5 text-gray-400">{nombreCliente(l.tercero_id)}</td>
+                            <td className="py-0.5 text-right font-semibold">{l.debe > 0 ? fmt(l.debe) : ''}</td>
+                            <td className="py-0.5 text-right font-semibold text-gray-500">{l.haber > 0 ? fmt(l.haber) : ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
